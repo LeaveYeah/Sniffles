@@ -7,6 +7,8 @@
 
 #include "Detect_Breakpoints.h"
 #include "../print/IPrinter.h"
+#include "seqan/align.h"
+#include <deque>
 
 void store_pos(vector<hist_str> &positions, long pos, std::string read_name) {
 	for (size_t i = 0; i < positions.size(); i++) {
@@ -58,6 +60,10 @@ Breakpoint * split_points(vector<std::string> names, std::map<std::string, read_
 	svs.support = new_support;
 	Breakpoint * point = new Breakpoint(svs, (*new_support.begin()).second.coordinates.second - (*new_support.begin()).second.coordinates.first);
 	return point;
+}
+
+void realign_parallel_reads(position_str point, RefVector ref){
+
 }
 
 void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> & new_points) {
@@ -195,6 +201,23 @@ void write_read(Alignment * tmp_aln, FILE * & ref_allel_reads) {
 	fprintf(ref_allel_reads, "%c",'\n');
 }
 void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
+//    typedef seqan::String<seqan::AminoAcid> TSequence;
+//    typedef seqan::Align<TSequence, seqan::ArrayGaps> TAlign;
+//    TSequence seq2 = "LKTEL";
+//    TSequence seq1 = "TELKDD";
+//    int match = -0;
+//    int mismatch = -1;
+//    int gap = -1;
+//
+//    TAlign align;
+//    seqan::resize(seqan::rows(align), 2);
+//    seqan::assignSource(seqan::row(align, 0), seq1);
+//    seqan::assignSource(row(align, 1), seq2);
+//
+//    int score = seqan::globalAlignment(align, seqan::Score<int, seqan::Simple>(match, mismatch, gap));
+//    std::cout << "Score: " << score << std::endl;
+//    std::cout << align << std::endl;
+
 	estimate_parameters(read_filename);
 	BamParser * mapped_file = 0;
 	RefVector ref;
@@ -224,6 +247,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 		//	ref_allel_reads = fopen(Parameter::Instance()->tmp_genotyp.c_str(), "wb");
 	}
 	Alignment * tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+//	std::deque<Alignment*> overlapAlignments;
+
 	long ref_space = get_ref_lengths(tmp_aln->getRefID(), ref);
 	long num_reads = 0;
 
@@ -267,6 +292,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				bst.clear(root);
 				current_RefID = tmp_aln->getRefID();
 				ref_space = get_ref_lengths(tmp_aln->getRefID(), ref);
+//				overlapAlignments.clear();
 			}
 
 			//SCAN read:
@@ -284,9 +310,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 #pragma omp section
 						{
 							//		clock_t begin = clock();
-							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
-								aln_event = tmp_aln->get_events_Aln();
-							}
+//							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
+//								aln_event = tmp_aln->get_events_Aln();
+//							}
 							//		Parameter::Instance()->meassure_time(begin, " Alignment ");
 						}
 #pragma omp section
@@ -319,14 +345,25 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				}
 
 				//store the potential SVs:
-				if (!aln_event.empty()) {
-					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
-				}
+//				if (!aln_event.empty()) {
+//					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
+//				}
 				if (!split_events.empty()) {
 					add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
+					//realign the reads in overlapAlignments
+
 				}
 			}
 		}
+//        int currentPosition = tmp_aln->getAlignment()->Position;
+//        if (!overlapAlignments.empty()) {
+//            Alignment *beginAlignment = overlapAlignments.front();
+//            while (beginAlignment->getAlignment()->Position + beginAlignment->getRefLength() < currentPosition) {
+//                overlapAlignments.pop_front();
+//                beginAlignment = overlapAlignments.front();
+//            }
+//        }
+//        overlapAlignments.push_back(tmp_aln->clone());
 		//get next read:
 		mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
 
@@ -369,6 +406,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
 		if (points[i]->get_SVtype() & TRA) {
 			vector<Breakpoint *> new_points;
+			//find parallel reads along with breakpoints and realign the reads
+
 			detect_merged_svs(points[i]->get_coordinates(), ref, new_points);
 			if (!new_points.empty()) {							// I only allow for 1 split!!
 				points[i] = new_points[0];
@@ -376,6 +415,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 			}
 		}
 	}
+
+
 	//std::cout<<"fin up"<<std::endl;
 	for (size_t i = 0; i < points.size(); i++) {
 		if (points[i]->get_SVtype() & TRA) {

@@ -434,7 +434,7 @@ int main(int argc, char *argv[]) {
 
 	try {
 
-		//init parameter and reads user defined parameter from command line.
+        //init parameter and reads user defined parameter from command line.
 		read_parameters(argc, argv);
 		//init openmp:
 		omp_set_dynamic(0);

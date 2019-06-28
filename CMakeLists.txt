@@ -34,5 +34,4 @@ endif()
 
 add_subdirectory(lib/zlib-1.2.7)
 add_subdirectory(lib/bamtools-2.3.0)
-
 add_subdirectory(src)

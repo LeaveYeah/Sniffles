@@ -114,6 +114,7 @@ public:
 	uint16_t getMappingQual();
 	string getName();
 	vector<CigarOp> getCigar();
+	Alignment * clone();
 	string getQualitValues();
 	size_t getRefLength();
 	size_t getOrigLen();

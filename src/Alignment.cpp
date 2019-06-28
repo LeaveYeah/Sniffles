@@ -17,6 +17,20 @@ void Alignment::setAlignment(BamAlignment * align) {
 	al = align;
 }
 
+Alignment * Alignment::clone(){
+    BamAlignment * bamAln = new BamAlignment(*al);
+    Alignment * copy = new Alignment();
+    copy->al = bamAln;
+    copy->ref_len = ref_len;
+    copy->includes_SV = includes_SV;
+    copy->alignment = alignment;
+    copy->orig_length = orig_length;
+    copy->is_computed = is_computed;
+    copy->stop = stop;
+
+    return copy;
+}
+
 void update_aln(std::string & alignment, int & i, int pos_to_modify) {
 	int ref_pos = 0;
 	while (i < alignment.size() && ref_pos != pos_to_modify) {
@@ -189,7 +203,9 @@ vector<differences_str> Alignment::summarizeAlignment(std::vector<indel_str> &de
 				ev.type = Parameter::Instance()->huge_ins * -1; //insertion: WE have to fix the length since we cannot estimate it!]
 				events.push_back(ev);
 			}
+
 		}
+
 	}
 
 	//exit(0);
@@ -1177,6 +1193,7 @@ vector<str_event> Alignment::get_events_Aln() {
 	}
 
 //comp_aln = clock();
+//determine the type of SV for noisy regions
 	int stop = 0;
 	size_t start = 0;
 	for (size_t i = 0; i < profile.size() && stop < event_aln.size(); i++) {
@@ -1224,7 +1241,7 @@ vector<str_event> Alignment::get_events_Aln() {
 				stop--;
 			}
 
-			//	cout<<start<<" events: "<<event_aln[start].type <<" pos "<<event_aln[start].readposition<<endl;
+				cout<<start<<" events: "<<event_aln[start].type <<" pos "<<event_aln[start].readposition<<endl;
 			int insert_max_pos = 0;
 			int insert_max = 0;
 
