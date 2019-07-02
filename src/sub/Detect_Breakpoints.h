@@ -33,6 +33,8 @@ struct tra_str{
     int hits;
     std::vector<int> end_positions;
     std::vector<std::string> names;
+    int sameStrand = 0;
+    int diffStrand = 0;
 };
 void clarify(std::vector<Breakpoint *> & points);
 void detect_breakpoints(std::string filename, IPrinter *& printer);

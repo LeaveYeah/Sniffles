@@ -66,6 +66,10 @@ void realign_parallel_reads(position_str point, RefVector ref){
 
 }
 
+void store_tra_str(position_str point, read_str * read){
+
+}
+
 void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> & new_points) {
 	new_points.clear(); //just in case!
 	vector<hist_str> pos_start;
@@ -177,29 +181,6 @@ void polish_points(std::vector<Breakpoint *> & points, RefVector ref) { //TODO m
 	}
 }
 
-void write_read(Alignment * tmp_aln, FILE * & ref_allel_reads) {
-/*	tmp.chr_id = tmp_aln->getRefID();	//check string in binary???
-	tmp.start = tmp_aln->getPosition();
-	tmp.length = tmp_aln->getRefLength();
-	if (tmp_aln->getStrand()) {
-		tmp.strand = 1;
-	} else {
-		tmp.strand = 2;
-	}*/
-
-	fprintf(ref_allel_reads, "%i",tmp_aln->getRefID());
-	fprintf(ref_allel_reads, "%c",'\t');
-	fprintf(ref_allel_reads, "%i",tmp_aln->getPosition());
-	fprintf(ref_allel_reads, "%c",'\t');
-	fprintf(ref_allel_reads, "%i",tmp_aln->getRefLength());
-	fprintf(ref_allel_reads, "%c",'\t');
-	if (tmp_aln->getStrand()) {
-		fprintf(ref_allel_reads, "%c",'1');
-	} else {
-		fprintf(ref_allel_reads, "%c",'2');
-	}
-	fprintf(ref_allel_reads, "%c",'\n');
-}
 void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 //    typedef seqan::String<seqan::AminoAcid> TSequence;
 //    typedef seqan::Align<TSequence, seqan::ArrayGaps> TAlign;
@@ -658,18 +639,18 @@ void add_splits(Alignment *& tmp, std::vector<aln_str> events, short type, RefVe
 			if (events[i - 1].strand == events[i].strand) {
 				//check this with + - strands!!
 
-				if (events[i - 1].strand) {
+				if (events[i - 1].strand) { //"++"
 					svs.start.min_pos = events[i - 1].pos + events[i - 1].length + get_ref_lengths(events[i - 1].RefID, ref);
 					svs.stop.max_pos = events[i].pos + get_ref_lengths(events[i].RefID, ref);
-				} else {
+				} else { //"--"
 					svs.start.min_pos = events[i - 1].pos + get_ref_lengths(events[i - 1].RefID, ref);
 					svs.stop.max_pos = events[i].pos + events[i].length + get_ref_lengths(events[i].RefID, ref);
 				}
 			} else {
-				if (events[i - 1].strand) {
+				if (events[i - 1].strand) { //"+-"
 					svs.start.min_pos = events[i - 1].pos + events[i - 1].length + get_ref_lengths(events[i - 1].RefID, ref);
 					svs.stop.max_pos = events[i].pos + events[i].length + get_ref_lengths(events[i].RefID, ref);
-				} else {
+				} else { //"-+"
 					svs.start.min_pos = events[i - 1].pos + get_ref_lengths(events[i - 1].RefID, ref);
 					svs.stop.max_pos = events[i].pos + get_ref_lengths(events[i].RefID, ref);
 				}

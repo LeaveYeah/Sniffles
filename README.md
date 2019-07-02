@@ -67,8 +67,8 @@ GCC Path:
 /projects/bsi/gentools/src/gcc/v4.9.4/bin/gcc
 
 Scratch:
-int start = IPrinter::calc_pos(SV->get_coordinates().start.most_support, ref, chr);
 
+int start = IPrinter::calc_pos(SV->get_coordinates().start.most_support, ref, chr);
 void store_start_pos(vector<tra_str> &positions, long pos, std::string read_name) {
     for (size_t i = 0; i < positions.size(); i++) {
         if (abs(positions[i].position - pos) < Parameter::Instance()->min_length) {
