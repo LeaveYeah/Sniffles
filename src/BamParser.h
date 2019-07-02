@@ -35,6 +35,8 @@ public:
 	}
 	Alignment * parseRead(uint16_t mappingQv);
 	void parseReadFast(uint16_t mappingQv,Alignment*& aln);
+	bool setRegion(const int &leftRefID, const int &leftPosition, const int &rightRefID, const int &rightPosition);
+	bool Rewind();
 	string get_header();
 	RefVector get_refInfo();
 };

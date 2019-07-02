@@ -67,37 +67,50 @@ GCC Path:
 /projects/bsi/gentools/src/gcc/v4.9.4/bin/gcc
 
 Scratch:
-
 int start = IPrinter::calc_pos(SV->get_coordinates().start.most_support, ref, chr);
-void store_start_pos(vector<tra_str> &positions, long pos, std::string read_name) {
+
+void add_map(long pos, std::map<long, int> map){
+    if (map.find(pos) == map.end() map[pos] = 1;
+    else map[pos]++;
+}
+void store_tra_pos(vector<tra_str> &positions, read_str read, std::string read_name) {
     for (size_t i = 0; i < positions.size(); i++) {
-        if (abs(positions[i].position - pos) < Parameter::Instance()->min_length) {
+        if (abs(positions[i].position - read.coordinates.first) < Parameter::Instance()->min_length) {
             positions[i].hits++;
             positions[i].names.push_back(read_name);
+            add_map(read.coordinates.first, positions[i].starts)
+            add_map(read.coordinates.second, positions[i].stops)
+            if (read.read_strand.first == read.read_strand.second)
+                positions[i].sameStrand_hits++;
+            else positions[i].diffStrand_hits++;
             return;
         }
     }
-    hist_str tmp;
-    tmp.position = pos;
+    tra_str tmp;
+    tmp.position = read.coordinates.first;
     tmp.hits = 1;
     tmp.names.push_back(read_name);
+    add_map(read.coordinates.first, tmp.starts)
+    add_map(read.coordinates.second, tmp.stops)
+    if (read.read_strand.first == read.read_strand.second)
+        tmp.sameStrand_hits = 1;
+    else tmp.diffStrand_hits = 1;
     positions.push_back(tmp);
 }
 
 void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> & new_points) {
     new_points.clear(); //just in case!
-    vector<hist_str> pos_start;
-    vector<hist_str> pos_stop;
+    vector<tra_str> pos_start;
     for (std::map<std::string, read_str>::iterator i = point.support.begin(); i != point.support.end(); ++i) {
-        store_pos(pos_start, (*i).second.coordinates.first, (*i).first);
-        store_pos(pos_stop, (*i).second.coordinates.second, (*i).first);
+        store_tra_pos(pos_start, (*i).second, (*i).first);
     }
 
     int start_count = 0;
     for (size_t i = 0; i < pos_start.size(); i++) {
         //std::cout<<pos_start[i].hits <<",";
-        if (pos_start[i].hits > Parameter::Instance()->min_support) {
-            start_count++;
+        if ((pos_start[i].hits > Parameter::Instance()->min_support / 2)
+                && (pos_start[i].hits <= Parameter::Instance()->min_support)) {
+            //do realignment, determine the start and the end the realignment
 
         }
     }
