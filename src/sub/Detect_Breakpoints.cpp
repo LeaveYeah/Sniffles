@@ -71,6 +71,7 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 	vector<hist_str> pos_start;
 	vector<hist_str> pos_stop;
 	for (std::map<std::string, read_str>::iterator i = point.support.begin(); i != point.support.end(); ++i) {
+
 		store_pos(pos_start, (*i).second.coordinates.first, (*i).first);
 		store_pos(pos_stop, (*i).second.coordinates.second, (*i).first);
 	}
@@ -82,6 +83,7 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 			start_count++;
 
 		}
+
 	}
 	int stop_count = 0;
 	for (size_t i = 0; i < pos_stop.size(); i++) {
@@ -177,29 +179,6 @@ void polish_points(std::vector<Breakpoint *> & points, RefVector ref) { //TODO m
 	}
 }
 
-void write_read(Alignment * tmp_aln, FILE * & ref_allel_reads) {
-/*	tmp.chr_id = tmp_aln->getRefID();	//check string in binary???
-	tmp.start = tmp_aln->getPosition();
-	tmp.length = tmp_aln->getRefLength();
-	if (tmp_aln->getStrand()) {
-		tmp.strand = 1;
-	} else {
-		tmp.strand = 2;
-	}*/
-
-	fprintf(ref_allel_reads, "%i",tmp_aln->getRefID());
-	fprintf(ref_allel_reads, "%c",'\t');
-	fprintf(ref_allel_reads, "%i",tmp_aln->getPosition());
-	fprintf(ref_allel_reads, "%c",'\t');
-	fprintf(ref_allel_reads, "%i",tmp_aln->getRefLength());
-	fprintf(ref_allel_reads, "%c",'\t');
-	if (tmp_aln->getStrand()) {
-		fprintf(ref_allel_reads, "%c",'1');
-	} else {
-		fprintf(ref_allel_reads, "%c",'2');
-	}
-	fprintf(ref_allel_reads, "%c",'\n');
-}
 void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 //    typedef seqan::String<seqan::AminoAcid> TSequence;
 //    typedef seqan::Align<TSequence, seqan::ArrayGaps> TAlign;
@@ -406,6 +385,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
 		if (points[i]->get_SVtype() & TRA) {
 			vector<Breakpoint *> new_points;
+
 			//find parallel reads along with breakpoints and realign the reads
 
 			detect_merged_svs(points[i]->get_coordinates(), ref, new_points);
@@ -416,6 +396,12 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 		}
 	}
 
+    std::string chr;
+    int start = IPrinter::calc_pos(points[1]->get_coordinates().start.min_pos, ref, chr);
+    if (mapped_file->Rewind())
+        if (mapped_file->setRegion(0, start, 0, start+10))
+            while (true)
+                mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
 
 	//std::cout<<"fin up"<<std::endl;
 	for (size_t i = 0; i < points.size(); i++) {
