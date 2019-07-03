@@ -107,9 +107,9 @@ void store_tra_pos(vector<tra_str> &positions, read_str read, std::string read_n
     long pos, opp_pos;
     if (start) {
         pos = read.coordinates.first;
-        opp_pos = read.coordinates.first;
+        opp_pos = read.coordinates.second;
     } else {
-        opp_pos = read.coordinates.first;
+        opp_pos = read.coordinates.second;
         pos = read.coordinates.first;
     }
 
@@ -164,6 +164,52 @@ long get_max_opp_pos(vector<long> opp_pos, int &max){
     return coordinate;
 }
 
+int cal_high_error_side(vector<differences_str> event_aln, long pos, long distance, long &read_pos, int &diff){
+    int left_hits = 0;
+    int right_hits = 0;
+    differences_str evt_left = event_aln[0];
+    differences_str evt_right = event_aln[event_aln.size()-1];
+    for (auto i : event_aln){
+        if (i.position < pos - distance) continue;
+        if (i.position > pos + distance) break;
+        if (i.position >= pos - distance && i.position <= pos){
+            left_hits += max((int) abs(i.type), 1);
+            evt_left = i;
+        }
+        else if (i.position >= pos && i.position <= pos + distance) {
+            right_hits += max((int) abs(i.type), 1);
+            if (evt_right.position > i.position) evt_right = i;
+        }
+
+    }
+
+    if (abs(evt_left.position - pos) < abs(evt_right.position - pos)) {
+        read_pos = evt_left.readposition;
+        diff = evt_left.position - pos;
+    } else if (abs(evt_left.position - pos) < abs(evt_right.position - pos)) {
+        read_pos = evt_right.readposition;
+        diff = evt_right.position - pos;
+    }
+
+    if (right_hits - left_hits >= distance / 5) {
+        if (abs(evt_left.position - pos) == abs(evt_right.position - pos)) {
+            read_pos = evt_left.readposition;
+            diff = evt_left.position - pos;
+        }
+        return 1;
+    }
+
+    if (left_hits - right_hits >= distance / 5) {
+        if (abs(evt_left.position - pos) == abs(evt_right.position - pos)) {
+            read_pos = evt_right.readposition;
+            diff = evt_right.position - pos;
+        }
+    }
+        return -1;
+    return 0;
+
+}
+
 
 void realign_parallel_reads(position_str point, const RefVector ref, BamParser* mapped_file) {
     vector<tra_str> pos_start;
@@ -182,22 +228,41 @@ void realign_parallel_reads(position_str point, const RefVector ref, BamParser* 
             long coordinate_start = get_max_pos(pos_start[i].map_pos, max_start);
             int max_stop = 0;
             long coordinate_stop = get_max_opp_pos(pos_start[i].map_pos[coordinate_start], max_start);
-            if (max_start >= 5 || max_start >= pos_start[i].hits /2){
-                long chr_pos_start;
-                int chr_id_start;
-                chr_pos_start = IPrinter::calc_pos(coordinate_start, ref, chr_id_start);
-                mapped_file->Rewind();
-                int distance = min(100, Parameter::Instance()->min_length);
-                mapped_file->setRegion(chr_id_start, chr_pos_start - distance, chr_id_start, chr_pos_start + distance);
-                Alignment* tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
-                while (!tmp_aln->getQueryBases().empty()){
-                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-                    std::vector<indel_str> dels;
-                    vector<differences_str> event_aln;
-                    event_aln = tmp_aln->summarizeAlignment(dels);
 
+            long chr_pos_start;
+            int chr_id_start;
+            chr_pos_start = IPrinter::calc_pos(coordinate_start, ref, chr_id_start);
+            mapped_file->Rewind();
+            long distance = min(100, Parameter::Instance()->min_length);
+            mapped_file->setRegion(chr_id_start, chr_pos_start - distance, chr_id_start, chr_pos_start + distance);
+            Alignment* tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+            while (!tmp_aln->getQueryBases().empty()){
+
+                std::vector<indel_str> dels;
+                vector<differences_str> event_aln;
+                event_aln = tmp_aln->summarizeAlignment(dels);
+                if (tmp_aln->getPosition() > coordinate_start - distance ||
+                    tmp_aln->getPosition() + tmp_aln->getRefLength() < coordinate_start + distance){
+                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
+                    continue;
                 }
+
+                long read_pos;
+                int diff;
+                int high_error_side = cal_high_error_side(event_aln, coordinate_start, distance, read_pos, diff);
+                if (high_error_side == 0) {
+                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
+                    continue;
+                }
+
+                mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
+
+
+
+
+
             }
+
 
         }
     }
