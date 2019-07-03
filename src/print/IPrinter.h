@@ -43,6 +43,7 @@ protected:
 	std::string assess_genotype(int ref, int support);
 public:
     static long calc_pos(long pos, RefVector ref, std::string &chr);
+    static long calc_pos(long pos, RefVector ref, int &chr_id);
 	IPrinter() {
 		id = 0;
 		root = NULL;

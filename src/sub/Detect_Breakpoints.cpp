@@ -8,6 +8,7 @@
 #include "Detect_Breakpoints.h"
 #include "../print/IPrinter.h"
 #include "seqan/align.h"
+#include "../Alignment.h"
 #include <deque>
 
 void store_pos(vector<hist_str> &positions, long pos, std::string read_name) {
@@ -62,9 +63,7 @@ Breakpoint * split_points(vector<std::string> names, std::map<std::string, read_
 	return point;
 }
 
-void realign_parallel_reads(position_str point, RefVector ref){
 
-}
 
 void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> & new_points) {
 	new_points.clear(); //just in case!
@@ -102,6 +101,107 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 			new_points.push_back(split_points(pos_stop[1].names, point.support));
 		}
 	}
+}
+
+void store_tra_pos(vector<tra_str> &positions, read_str read, std::string read_name, bool start) {
+    long pos, opp_pos;
+    if (start) {
+        pos = read.coordinates.first;
+        opp_pos = read.coordinates.first;
+    } else {
+        opp_pos = read.coordinates.first;
+        pos = read.coordinates.first;
+    }
+
+
+    for (size_t i = 0; i < positions.size(); i++) {
+        if (abs(positions[i].position - pos) < Parameter::Instance()->min_length) {
+            positions[i].hits++;
+            positions[i].names.push_back(read_name);
+            positions[i].map_pos[pos].push_back(opp_pos);
+            if (read.read_strand.first == read.read_strand.second)
+                positions[i].sameStrand_hits++;
+            else positions[i].diffStrand_hits++;
+            return;
+        }
+    }
+    tra_str tmp;
+    tmp.position = pos;
+    tmp.hits = 1;
+    tmp.names.push_back(read_name);
+    tmp.map_pos[pos].push_back(opp_pos);
+    if (read.read_strand.first == read.read_strand.second)
+        tmp.sameStrand_hits = 1;
+    else tmp.diffStrand_hits = 1;
+    positions.push_back(tmp);
+}
+
+long get_max_pos(map<long, vector<long>> map_pos, int &max){
+    long coordinate = 0;
+    for (auto i = map_pos.begin(); i != map_pos.end(); i++){
+        if ((*i).second.size() > max){
+            max = (*i).second.size();
+            coordinate = (*i).first;
+        }
+    }
+    return coordinate;
+}
+
+long get_max_opp_pos(vector<long> opp_pos, int &max){
+    map<long, int> map_opp_pos;
+    for (auto j = opp_pos.begin(); j != opp_pos.end(); j++)
+        if (map_opp_pos.find(*j) == map_opp_pos.end())
+            map_opp_pos[*j] = 1;
+        else map_opp_pos[*j]++;
+    long coordinate = 0;
+
+    for (auto i = map_opp_pos.begin(); i != map_opp_pos.end(); i++){
+        if ((*i).second > max){
+            max = (*i).second;
+            coordinate = (*i).first;
+        }
+    }
+    return coordinate;
+}
+
+
+void realign_parallel_reads(position_str point, const RefVector ref, BamParser* mapped_file) {
+    vector<tra_str> pos_start;
+    vector<tra_str> pos_stop;
+
+    for (auto i = point.support.begin(); i != point.support.end(); ++i) {
+        store_tra_pos(pos_start, (*i).second, (*i).first, true);
+        store_tra_pos(pos_stop, (*i).second, (*i).first, false);
+    }
+
+    for (size_t i = 0; i < pos_start.size(); i++) {
+        //std::cout<<pos_start[i].hits <<",";
+        if ((pos_start[i].hits > Parameter::Instance()->min_support / 2)
+            && (pos_start[i].hits <= Parameter::Instance()->min_support)) {
+            int max_start = 0;
+            long coordinate_start = get_max_pos(pos_start[i].map_pos, max_start);
+            int max_stop = 0;
+            long coordinate_stop = get_max_opp_pos(pos_start[i].map_pos[coordinate_start], max_start);
+            if (max_start >= 5 || max_start >= pos_start[i].hits /2){
+                long chr_pos_start;
+                int chr_id_start;
+                chr_pos_start = IPrinter::calc_pos(coordinate_start, ref, chr_id_start);
+                mapped_file->Rewind();
+                int distance = min(100, Parameter::Instance()->min_length);
+                mapped_file->setRegion(chr_id_start, chr_pos_start - distance, chr_id_start, chr_pos_start + distance);
+                Alignment* tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+                while (!tmp_aln->getQueryBases().empty()){
+                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
+                    std::vector<indel_str> dels;
+                    vector<differences_str> event_aln;
+                    event_aln = tmp_aln->summarizeAlignment(dels);
+
+                }
+            }
+
+        }
+    }
+
 }
 
 std::string TRANS_type(char type) {
@@ -289,9 +389,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 #pragma omp section
 						{
 							//		clock_t begin = clock();
-//							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
-//								aln_event = tmp_aln->get_events_Aln();
-//							}
+							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
+								aln_event = tmp_aln->get_events_Aln();
+							}
 							//		Parameter::Instance()->meassure_time(begin, " Alignment ");
 						}
 #pragma omp section
@@ -324,9 +424,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				}
 
 				//store the potential SVs:
-//				if (!aln_event.empty()) {
-//					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
-//				}
+				if (!aln_event.empty()) {
+					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
+				}
 				if (!split_events.empty()) {
 					add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
 					//realign the reads in overlapAlignments
@@ -387,6 +487,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 			vector<Breakpoint *> new_points;
 
 			//find parallel reads along with breakpoints and realign the reads
+			realign_parallel_reads(points[i]->get_coordinates(), ref, mapped_file);
 
 			detect_merged_svs(points[i]->get_coordinates(), ref, new_points);
 			if (!new_points.empty()) {							// I only allow for 1 split!!
@@ -397,11 +498,6 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	}
 
     std::string chr;
-    int start = IPrinter::calc_pos(points[1]->get_coordinates().start.min_pos, ref, chr);
-    if (mapped_file->Rewind())
-        if (mapped_file->setRegion(0, start, 0, start+10))
-            while (true)
-                mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
 
 	//std::cout<<"fin up"<<std::endl;
 	for (size_t i = 0; i < points.size(); i++) {
@@ -840,3 +936,5 @@ bool overlaps(aln_str prev, aln_str curr) {
 //	std::cout<<overlap<<" "<<ratio<<std::endl;
 	return (ratio > 0.4 && overlap > 200);
 }
+
+

@@ -130,6 +130,19 @@ long IPrinter::calc_pos(long pos, RefVector ref, std::string &chr) {
 	return pos + ref[i].RefLength + (long) Parameter::Instance()->max_dist;
 }
 
+long IPrinter::calc_pos(long pos, RefVector ref, int &chr_id) {
+    size_t i = 0;
+    pos -= (ref[i].RefLength + Parameter::Instance()->max_dist);
+
+    while (i + 1 < ref.size() && pos >= 0) {
+        i++;
+        //	std::cout<<i<<" "<<ref.size()<<" "<<pos<<" "<<pos-Parameter::Instance()->max_dist<<std::endl;
+        pos -= ((long) ref[i].RefLength + (long) Parameter::Instance()->max_dist);
+    }
+    chr_id = i;
+    return pos + ref[i].RefLength + (long) Parameter::Instance()->max_dist;
+}
+
 std::string IPrinter::get_type(char type) {
 	string tmp;
 	if (type & DEL) {

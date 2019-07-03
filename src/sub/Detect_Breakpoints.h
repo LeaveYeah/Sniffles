@@ -31,10 +31,9 @@ struct hist_str{
 struct tra_str{
     long position;
     int hits;
-    int sameStrand_hits;
-    int diffStrand_hits;
-    std::map<long, int> starts;
-    std::map<long, int> stops;
+    int sameStrand_hits = 0;
+    int diffStrand_hits = 0;
+    std::map<long, vector<long>> map_pos;
     std::vector<std::string> names;
 };
 void clarify(std::vector<Breakpoint *> & points);
