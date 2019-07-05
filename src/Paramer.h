@@ -44,6 +44,8 @@ public:
 	std::string tmp_phasing;
 	std::string version;
 	std::string input_vcf;
+    std::string fasta_index_file;
+    std::string fasta_file;
 
 	std::vector<std::string> bam_files;
 	std::map<std::string, bool> chr_names;
@@ -86,6 +88,7 @@ public:
 	bool cs_string;
 	bool read_strand;
 	bool ccs_reads;
+
 
 	void set_regions(std::string reg) {
 		size_t i = 0;

@@ -86,7 +86,11 @@ private:
 	 void sort_insert_ref(aln_str tmp, vector<aln_str> &entries);
 	 void check_entries(vector<aln_str> &entries);
 	 bool overlapping_segments(vector<aln_str> entries);
+
 public:
+    long bp_read_pos;
+    int high_error_region_score;
+    bool high_error_side;
 	Alignment(){
 		al=NULL;
 		ref_len=0;
@@ -95,6 +99,9 @@ public:
 		al=NULL;
 		is_computed=false;
 		includes_SV=false;
+		bp_read_pos=0;
+		high_error_side=false;
+		high_error_region_score=0;
 	}
 	~Alignment(){
 		alignment.first.clear();
@@ -146,6 +153,7 @@ public:
 	 std::string get_cs();
 	 double get_avg_indel_length_Cigar();
 	 vector<int> get_avg_diff(double & dist,double & avg_del, double & avg_len);
+
 
 };
 

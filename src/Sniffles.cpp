@@ -209,6 +209,8 @@ void read_parameters(int argc, char *argv[]) {
 	Parameter::Instance()->cs_string = arg_cs_string.getValue();
 	Parameter::Instance()->read_strand=arg_read_strand.getValue();
 	Parameter::Instance()->ccs_reads=arg_ccs.getValue();
+	Parameter::Instance()->fasta_file="/data2/junwenwang/m204333/Project/sniffles/out/simulated/hg38/simulated.fasta";
+    Parameter::Instance()->fasta_index_file=Parameter::Instance()->fasta_file+".fai";
 
 	if(Parameter::Instance()->ccs_reads){
 		Parameter::Instance()->skip_parameter_estimation=true;

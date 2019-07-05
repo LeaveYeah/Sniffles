@@ -35,8 +35,7 @@ struct tra_str{
     int diffStrand_hits = 0;
     std::map<long, vector<long>> map_pos;
     std::vector<std::string> names;
-    int sameStrand = 0;
-    int diffStrand = 0;
+
 };
 void clarify(std::vector<Breakpoint *> & points);
 void detect_breakpoints(std::string filename, IPrinter *& printer);
