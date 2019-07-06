@@ -47,6 +47,8 @@ struct indel_str{
 	std::string sequence;
 };
 
+
+
 struct str_event{
 	short length;
 	int pos;

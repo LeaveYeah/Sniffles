@@ -74,6 +74,8 @@ void add_event(int pos, size_t & i, vector<differences_str> & events) {
  * cs:Z::5+g:7+t:4+c:7-a:6*tg:15*tg:2+g:6+c:1+c:1+c:4+a:15+g:4+c:12*gt*ta:2+c:7+t:8+t:17+t:8+g:5+g:10-g:4+g*tc:5+t*ag:10+a:4-ttt
  */
 
+
+
 vector<differences_str> Alignment::summarize_csstring(std::vector<indel_str> &dels) {
 
 	string cs = this->get_cs();
@@ -283,18 +285,14 @@ vector<differences_str> Alignment::summarizeAlignment(std::vector<indel_str> &de
 			del.sequence = "";
 			del.pos = -1;
 		}
+
 	}
 
-	//if (flag) {
-	//	std::cout << this->getName() << " " << (double) sum_mis << " " << (double) sum_events<<" "<<sum_single <<" "<< (double) sum_mis / (double) (sum_single+sum_mis)<< endl;
-	//}
-	//if (Parameter::Instance()->ccs_reads && (double) sum_mis / (double) (sum_events+sum_mis) > 0.95) {
-	//	events.clear();
-	//}
-//	Parameter::Instance()->meassure_time(comp_aln, "\t\tMD string: ");
+
 
 	return events;
 }
+
 void Alignment::computeAlignment() {
 	cout << "COMP ALN!" << endl;
 

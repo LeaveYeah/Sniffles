@@ -28,6 +28,7 @@ struct hist_str{
 	std::vector<std::string> names;
 };
 
+
 struct tra_str{
     long position;
     int hits;
@@ -37,6 +38,8 @@ struct tra_str{
     std::vector<std::string> names;
 
 };
+
+
 void clarify(std::vector<Breakpoint *> & points);
 void detect_breakpoints(std::string filename, IPrinter *& printer);
 //void screen_for_events(Node * list,IntervallTree & bst ,TNode *&root, int cov, int lowMQ_cov,RefVector ref);
