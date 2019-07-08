@@ -64,10 +64,12 @@ void read_parameters(int argc, char *argv[]) {
 	TCLAP::CmdLine cmd("Sniffles version ", ' ', Parameter::Instance()->version);
 
 	TCLAP::ValueArg<std::string> arg_bamfile("m", "mapped_reads", "Sorted bam File", true, "", "string", cmd);
+    TCLAP::ValueArg<std::string> arg_fastafile("a", "reference", "indexed fasta file", true, "", "string", cmd);
 	TCLAP::ValueArg<std::string> arg_vcf("v", "vcf", "VCF output file name", false, "", "string", cmd);
 	TCLAP::ValueArg<std::string> arg_input_vcf("", "Ivcf", "Input VCF file name. Enable force calling", false, "", "string", cmd);
 	TCLAP::ValueArg<std::string> arg_bedpe("b", "bedpe", " bedpe output file name", false, "", "string", cmd);
 	TCLAP::ValueArg<std::string> arg_tmp_file("", "tmp_file", "path to temporary file otherwise Sniffles will use the current directory.", false, "", "string", cmd);
+
 
 	//TCLAP::ValueArg<std::string> arg_chrs("c", "chrs", " comma seperated list of chrs to scan", false, "", "string");
 	TCLAP::ValueArg<int> arg_support("s", "min_support", "Minimum number of reads that support a SV.", false, 10, "int", cmd);
@@ -111,6 +113,7 @@ void read_parameters(int argc, char *argv[]) {
 	usage << "Input/Output:" << std::endl;
 
 	printParameter<std::string>(usage, arg_bamfile);
+	printParameter<std::string>(usage, arg_tmp_file);
 	printParameter<std::string>(usage, arg_vcf);
 	printParameter<std::string>(usage, arg_bedpe);
 	printParameter<std::string>(usage, arg_input_vcf);
@@ -209,7 +212,7 @@ void read_parameters(int argc, char *argv[]) {
 	Parameter::Instance()->cs_string = arg_cs_string.getValue();
 	Parameter::Instance()->read_strand=arg_read_strand.getValue();
 	Parameter::Instance()->ccs_reads=arg_ccs.getValue();
-	Parameter::Instance()->fasta_file="/data2/junwenwang/m204333/Project/sniffles/out/simulated/hg38/simulated.fasta";
+	Parameter::Instance()->fasta_file=arg_fastafile.getValue();
     Parameter::Instance()->fasta_index_file=Parameter::Instance()->fasta_file+".fai";
 
 	if(Parameter::Instance()->ccs_reads){

@@ -47,7 +47,6 @@ public:
     std::string fasta_index_file;
     std::string fasta_file;
 
-
 	std::vector<std::string> bam_files;
 	std::map<std::string, bool> chr_names;
 	short min_mq;
@@ -64,6 +63,7 @@ public:
 	//double min_num_mismatches;
 
 	int window_thresh;
+	int error_thresh;
 	int min_support;
 	int max_splits;
 	int max_dist;

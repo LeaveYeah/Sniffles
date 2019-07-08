@@ -410,9 +410,12 @@ size_t Alignment::getRefLength() {
 	return this->ref_len;
 //	return get_length(this->al->CigarData);
 }
+
 size_t Alignment::getOrigLen() {
 	return orig_length;
 }
+
+
 pair<string, string> Alignment::getSequence() {
 	return alignment;
 }
@@ -1252,7 +1255,7 @@ vector<str_event> Alignment::get_events_Aln() {
 				stop--;
 			}
 
-				cout<<start<<" events: "<<event_aln[start].type <<" pos "<<event_aln[start].readposition<<endl;
+
 			int insert_max_pos = 0;
 			int insert_max = 0;
 

@@ -195,6 +195,11 @@ void Breakpoint::add_read(Breakpoint * point) { //point = one read support!
 	}
 }
 
+void Breakpoint::add_read(read_str read, string read_name) {
+    this->positions.support[read_name] = read;
+}
+
+
 ///////////////////////////////// MERGING////////////////////////////////////////////
 std::string Breakpoint::get_read_names() {
 	std::string read_names;

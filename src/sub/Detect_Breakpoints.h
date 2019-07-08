@@ -28,7 +28,6 @@ struct hist_str{
 	std::vector<std::string> names;
 };
 
-
 struct tra_str{
     long position;
     int hits;
@@ -51,6 +50,7 @@ bool overlaps(aln_str prev,aln_str curr);
 void detect_merged_svs(Breakpoint * point);
 
 std::string TRANS_type(char type);
+
 
 
 #endif /* SUB_DETECT_BREAKPOINTS_H_ */

@@ -139,10 +139,12 @@ public:
 	position_str get_coordinates() {
 		return this->positions;
 	}
+
 	void predict_SV();
 	std::string to_string(RefVector ref);
 
 	void add_read(Breakpoint * point);
+	void add_read(read_str read, string read_name);
 
 	std::string get_chr(long pos, RefVector ref);
 	long calc_pos(long pos, RefVector ref);

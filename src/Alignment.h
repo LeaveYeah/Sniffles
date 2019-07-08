@@ -89,6 +89,7 @@ private:
 	 void check_entries(vector<aln_str> &entries);
 	 bool overlapping_segments(vector<aln_str> entries);
 
+
 public:
     long bp_read_pos;
     int high_error_region_score;
