@@ -92,8 +92,8 @@ SET_TARGET_PROPERTIES(sniffles-debug PROPERTIES COMPILE_FLAGS "-g3 -O0")
 
 #target_link_libraries(sniffles-debug pthread)
 TARGET_LINK_LIBRARIES(sniffles-debug BamTools-static)
-TARGET_LINK_LIBRARIES(sniffles-debug zlibstatic)
 TARGET_LINK_LIBRARIES (sniffles-debug ${SEQAN_LIBRARIES})
+TARGET_LINK_LIBRARIES(sniffles-debug zlibstatic)
 target_link_libraries(sniffles-debug ${HTSlib_LIBRARIES})
 
 

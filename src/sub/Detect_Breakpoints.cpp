@@ -10,6 +10,7 @@
 #include "seqan/align.h"
 #include "../Alignment.h"
 #include "../bioio.hpp"
+#include <chrono>
 
 void store_pos(vector<hist_str> &positions, long pos, std::string read_name) {
 	for (size_t i = 0; i < positions.size(); i++) {
@@ -230,9 +231,11 @@ int cal_high_error_side(vector<differences_str> &event_aln, long pos, long dista
 
 int map_read(Alignment * tmp_aln, string chr, long pos, bool strand, int diff, int distance,
         const bioio::FastaIndex  index, std::ifstream & fasta){
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     using namespace seqan;
     typedef String<char> TSequence;
-    typedef StringSet<TSequence> TStringSet;                    // container for strings
+    typedef StringSet<TSequence> TStringSet;
+    typedef Align<TSequence, ArrayGaps> TAlign;// container for strings
     typedef StringSet<TSequence, Dependent<>> TDepStringSet;
     typedef seqan::Alignment<TDepStringSet> TAlignStringSet;// dependent string set
     typedef Graph<TAlignStringSet> TAlignGraph;       // alignment graph// sequence type
@@ -247,22 +250,30 @@ int map_read(Alignment * tmp_aln, string chr, long pos, bool strand, int diff, i
     if (strand != tmp_aln->high_error_side) pos = pos - 100;
 
     TSequence reference = bioio::read_fasta_contig(fasta, index.at(chr), pos, distance);
+    if (tmp_aln->bp_read_pos + distance > tmp_aln->getQueryBases().size())
+        return -50;
+    std::cout << chr << " " << pos << endl;
+    std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
     TSequence sequence = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
     TStringSet sequences;
     appendValue(sequences, reference);
     appendValue(sequences, sequence);
 
     TAlignGraph alignG(sequences);
+
     int score = globalAlignment(alignG, Score<int, Simple>(0, -1, -1), AlignConfig<false, false, true, true>(), LinearGaps());
 //
 //
 //
-//    TAlign align;
-//    resize(rows(align), 2);
-//    assignSource(row(align, 0), reference);
-//    assignSource(row(align, 1), sequence);
-//    int score = globalAlignment(align, Score<int, Simple>(0, -1, -1));
+    TAlign align;
+    resize(rows(align), 2);
+    assignSource(row(align, 0), reference);
+    assignSource(row(align, 1), sequence);
+//    int score = globalAlignment(align,  MyersBitVector());
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
 
+    std::cout << "Time for one alignment :" << duration << endl;
     return score;
 
 }
@@ -294,8 +305,12 @@ void realign_parallel_reads(Breakpoint  *breakpoint, const RefVector ref, BamPar
     }
 
     for (size_t i = 0; i < pos_start.size(); i++) {
+//        cout << "pos_start.size():" << pos_start.size() << endl;
         //std::cout<<pos_start[i].hits <<",";
+        long time = 0;
+
         if (pos_start[i].hits > Parameter::Instance()->min_support / 2){
+
             bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
             int max_start = 0;
             long coordinate_start = get_max_pos(pos_start[i].map_pos, max_start);
@@ -310,29 +325,45 @@ void realign_parallel_reads(Breakpoint  *breakpoint, const RefVector ref, BamPar
 
             long distance = min(100, Parameter::Instance()->min_length);
 
+            auto t0 = std::chrono::high_resolution_clock::now();
             mapped_file->Rewind();
-            mapped_file->setRegion(chr_id_start, chr_pos_start - distance, chr_id_start, chr_pos_start + distance);
+            mapped_file->Jump(chr_id_start, chr_pos_start - distance);
             Alignment* tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
             const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
             std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
-            while (!tmp_aln->getQueryBases().empty()) {
+            auto t0_5 = std::chrono::high_resolution_clock::now();
 
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t0_5 - t0 ).count();
+            std::cout << "Overhead duration: " << duration << endl;
+
+            int count = 0;
+            while (!tmp_aln->getQueryBases().empty()) {
+                count ++;
                 vector<differences_str> event_aln;
                 vector<indel_str> dels;
+
                 event_aln = tmp_aln->summarizeAlignment(dels);
+                if (tmp_aln->getPosition() > chr_pos_start - distance || tmp_aln->getRefID() != chr_id_start) {
+                    break;
+                }
                 if (tmp_aln->getPosition() > chr_pos_start - distance ||
                     tmp_aln->getPosition() + tmp_aln->getRefLength() < chr_pos_start  + distance) {
                     mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
                     continue;
                 }
 
+
+
                 int diff;
                 int high_error_side = cal_high_error_side(event_aln, chr_pos_start, distance, diff, tmp_aln);
+
                 if (high_error_side == 0) {
                     mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
                     continue;
                 }
+
                 int alt_aln_score = map_read(tmp_aln, chr_stop, chr_pos_stop, isSameStrand, diff, distance, index, fasta);
+                auto t4 = std::chrono::high_resolution_clock::now();
                 if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
                     alt_aln_score > -0.2 * distance) {
                     read_str tmp;
@@ -346,21 +377,31 @@ void realign_parallel_reads(Breakpoint  *breakpoint, const RefVector ref, BamPar
                     breakpoint->add_read(tmp, tmp_aln->getName());
                 }
                 mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
+
             }
 
-            mapped_file->Rewind();
-            mapped_file->setRegion(chr_id_stop, chr_pos_stop - distance, chr_id_stop, chr_pos_stop + distance);
+            t0 = std::chrono::high_resolution_clock::now();
+            mapped_file->Jump(chr_id_stop, chr_pos_stop - distance);
             tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
-            while (!tmp_aln->getQueryBases().empty()) {
 
+            t0_5 = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>( t0_5 - t0 ).count();
+            cout << "overhead duration:" << duration << endl;
+            while (!tmp_aln->getQueryBases().empty()) {
+                count ++;
                 vector<differences_str> event_aln;
                 vector<indel_str> dels;
+
                 event_aln = tmp_aln->summarizeAlignment(dels);
+                if (tmp_aln->getPosition() > chr_pos_stop - distance) {
+                    break;
+                }
                 if (tmp_aln->getPosition() > chr_pos_stop - distance ||
                     tmp_aln->getPosition() + tmp_aln->getRefLength() < chr_pos_stop + distance) {
                     mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
                     continue;
                 }
+
 
                 int diff;
                 int high_error_side = cal_high_error_side(event_aln, chr_pos_stop, distance, diff, tmp_aln);
@@ -387,6 +428,11 @@ void realign_parallel_reads(Breakpoint  *breakpoint, const RefVector ref, BamPar
 
 
             }
+            cout << "num of read realignment:" << count << endl;
+            auto t1 = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>( t1 - t0 ).count();
+            cout << "time for stop read: " << duration << endl;
+
         }
     }
 
@@ -499,7 +545,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 		ref_allel_reads = fopen(Parameter::Instance()->tmp_genotyp.c_str(), "w");
 		//	ref_allel_reads = fopen(Parameter::Instance()->tmp_genotyp.c_str(), "wb");
 	}
+
 	Alignment * tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+
 //	std::deque<Alignment*> overlapAlignments;
 
 	long ref_space = get_ref_lengths(tmp_aln->getRefID(), ref);
@@ -563,9 +611,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 #pragma omp section
 						{
 							//		clock_t begin = clock();
-							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
-								aln_event = tmp_aln->get_events_Aln();
-							}
+//							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
+//								aln_event = tmp_aln->get_events_Aln();
+//							}
 							//		Parameter::Instance()->meassure_time(begin, " Alignment ");
 						}
 #pragma omp section
@@ -598,9 +646,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				}
 
 				//store the potential SVs:
-				if (!aln_event.empty()) {
-					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
-				}
+//				if (!aln_event.empty()) {
+//					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
+//				}
 				if (!split_events.empty()) {
 					add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
 					//realign the reads in overlapAlignments
@@ -656,20 +704,28 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	final.get_breakpoints(root_final, points);
 	//std::cout<<"Detect merged tra"<<std::endl;
 	size_t points_size = points.size();
-	for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
-		if (points[i]->get_SVtype() & TRA) {
-			vector<Breakpoint *> new_points;
+	cout << "points size:" << points_size << endl;
 
-			//find parallel reads along with breakpoints and realign the reads
-			realign_parallel_reads(points[i], ref, mapped_file);
+    mapped_file->Rewind();
+    for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
+        if (points[i]->get_SVtype() & TRA) {
+            vector<Breakpoint *> new_points;
+            cout << i << endl;
+            auto t1 = std::chrono::high_resolution_clock::now();
+            //find parallel reads along with breakpoints and realign the reads
+            realign_parallel_reads(points[i], ref, mapped_file);
+            auto t2 = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+            if (duration > 200000)
+                cout << "Align one point duration: " << duration << endl;
 
-			detect_merged_svs(points[i]->get_coordinates(), ref, new_points);
-			if (!new_points.empty()) {							// I only allow for 1 split!!
-				points[i] = new_points[0];
-				points.push_back(new_points[1]);
-			}
-		}
-	}
+            detect_merged_svs(points[i]->get_coordinates(), ref, new_points);
+            if (!new_points.empty()) {                            // I only allow for 1 split!!
+                points[i] = new_points[0];
+                points.push_back(new_points[1]);
+            }
+        }
+    }
 
     std::string chr;
 

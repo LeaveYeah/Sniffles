@@ -23,6 +23,11 @@ bool BamParser::setRegion(const int &leftRefID, const int &leftPosition,
     return reader.SetRegion(leftRefID, leftPosition, rightRefID, rightPosition);
 }
 
+bool BamParser::Jump (int refID, int position){
+    return reader.Jump(refID, position);
+}
+
+
 bool BamParser::Rewind() {
     return reader.Rewind();
 }
