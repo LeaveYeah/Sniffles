@@ -175,7 +175,7 @@ long get_max_opp_pos(vector<long> opp_pos, int &max){
     return coordinate;
 }
 
-int cal_high_error_side(vector<differences_str> &event_aln, long pos, long distance, int& diff, Alignment * tmp_aln){
+bool cal_high_error_side(vector<differences_str> &event_aln, long pos, long distance, int& diff, Alignment * tmp_aln){
     for (size_t j = 0; j < event_aln.size(); j++) {
         if (event_aln[j].type == 0)
             fix_mismatch_read_pos(event_aln, j, tmp_aln);
@@ -213,7 +213,7 @@ int cal_high_error_side(vector<differences_str> &event_aln, long pos, long dista
             tmp_aln->high_error_side = true;
             diff = evt_left.position - pos;
         }
-        return 1;
+        return true;
     }
 
     if (left_hits - right_hits >= distance / 5) {
@@ -223,13 +223,13 @@ int cal_high_error_side(vector<differences_str> &event_aln, long pos, long dista
             tmp_aln->high_error_side = false;
             diff = evt_right.position - pos;
         }
-        return -1;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
-int map_read(Alignment * tmp_aln, string chr, long pos, bool strand, int diff, int distance,
+int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
         const bioio::FastaIndex  index, std::ifstream & fasta){
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     using namespace seqan;
@@ -243,16 +243,16 @@ int map_read(Alignment * tmp_aln, string chr, long pos, bool strand, int diff, i
 
 
 
-    if (strand) pos += diff;
-    else pos -= diff;
+    if (bp.isSameStrand) bp.chr_pos.second += diff;
+    else bp.chr_pos.second  -= diff;
 
     if (!tmp_aln->high_error_side) tmp_aln->bp_read_pos -= distance; //lefthand side
-    if (strand != tmp_aln->high_error_side) pos = pos - 100;
+    if (bp.isSameStrand != tmp_aln->high_error_side) bp.chr_pos.second -= distance;
 
-    TSequence reference = bioio::read_fasta_contig(fasta, index.at(chr), pos, distance);
+    TSequence reference = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
     if (tmp_aln->bp_read_pos + distance > tmp_aln->getQueryBases().size())
         return -50;
-    std::cout << chr << " " << pos << endl;
+    std::cout << bp.chr.second << " " << bp.chr_pos.second << endl;
     std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
     TSequence sequence = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
     TStringSet sequences;
@@ -291,152 +291,6 @@ int map_read(Alignment * tmp_aln, string chr, long pos, bool strand, int diff, i
 //        ev.type = al->CigarData[i].Length * -1; //insertion
 //    }
 //}
-
-
-void realign_parallel_reads(Breakpoint  *breakpoint, const RefVector ref, BamParser* mapped_file) {
-    auto point = breakpoint->get_coordinates();
-    vector<tra_str> pos_start;
-
-    vector<tra_str> pos_stop;
-
-    for (auto i = point.support.begin(); i != point.support.end(); ++i) {
-        store_tra_pos(pos_start, (*i).second, (*i).first, true);
-        store_tra_pos(pos_stop, (*i).second, (*i).first, false);
-    }
-
-    for (size_t i = 0; i < pos_start.size(); i++) {
-//        cout << "pos_start.size():" << pos_start.size() << endl;
-        //std::cout<<pos_start[i].hits <<",";
-        long time = 0;
-
-        if (pos_start[i].hits > Parameter::Instance()->min_support / 2){
-
-            bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
-            int max_start = 0;
-            long coordinate_start = get_max_pos(pos_start[i].map_pos, max_start);
-            int max_stop = 0;
-            long coordinate_stop = get_max_opp_pos(pos_start[i].map_pos[coordinate_start], max_stop);
-
-            long chr_pos_start, chr_pos_stop;
-            int chr_id_start, chr_id_stop;
-            chr_pos_start = IPrinter::calc_pos(coordinate_start, ref, chr_id_start);
-            chr_pos_stop = IPrinter::calc_pos(coordinate_stop, ref, chr_id_stop);
-            string chr_start = ref[chr_id_start].RefName, chr_stop=ref[chr_id_stop].RefName;
-
-            long distance = min(100, Parameter::Instance()->min_length);
-
-            auto t0 = std::chrono::high_resolution_clock::now();
-            mapped_file->Rewind();
-            mapped_file->Jump(chr_id_start, chr_pos_start - distance);
-            Alignment* tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
-            const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
-            std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
-            auto t0_5 = std::chrono::high_resolution_clock::now();
-
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t0_5 - t0 ).count();
-            std::cout << "Overhead duration: " << duration << endl;
-
-            int count = 0;
-            while (!tmp_aln->getQueryBases().empty()) {
-                count ++;
-                vector<differences_str> event_aln;
-                vector<indel_str> dels;
-
-                event_aln = tmp_aln->summarizeAlignment(dels);
-                if (tmp_aln->getPosition() > chr_pos_start - distance || tmp_aln->getRefID() != chr_id_start) {
-                    break;
-                }
-                if (tmp_aln->getPosition() > chr_pos_start - distance ||
-                    tmp_aln->getPosition() + tmp_aln->getRefLength() < chr_pos_start  + distance) {
-                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-                    continue;
-                }
-
-
-
-                int diff;
-                int high_error_side = cal_high_error_side(event_aln, chr_pos_start, distance, diff, tmp_aln);
-
-                if (high_error_side == 0) {
-                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-                    continue;
-                }
-
-                int alt_aln_score = map_read(tmp_aln, chr_stop, chr_pos_stop, isSameStrand, diff, distance, index, fasta);
-                auto t4 = std::chrono::high_resolution_clock::now();
-                if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
-                    alt_aln_score > -0.2 * distance) {
-                    read_str tmp;
-                    tmp.coordinates.first = coordinate_start + diff;
-                    if (isSameStrand)
-                        tmp.coordinates.second = coordinate_stop + diff;
-                    else tmp.coordinates.second - coordinate_stop - diff;
-
-                    tmp.SV = TRA;
-                    tmp.type = 1;
-                    breakpoint->add_read(tmp, tmp_aln->getName());
-                }
-                mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-
-            }
-
-            t0 = std::chrono::high_resolution_clock::now();
-            mapped_file->Jump(chr_id_stop, chr_pos_stop - distance);
-            tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
-
-            t0_5 = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::microseconds>( t0_5 - t0 ).count();
-            cout << "overhead duration:" << duration << endl;
-            while (!tmp_aln->getQueryBases().empty()) {
-                count ++;
-                vector<differences_str> event_aln;
-                vector<indel_str> dels;
-
-                event_aln = tmp_aln->summarizeAlignment(dels);
-                if (tmp_aln->getPosition() > chr_pos_stop - distance) {
-                    break;
-                }
-                if (tmp_aln->getPosition() > chr_pos_stop - distance ||
-                    tmp_aln->getPosition() + tmp_aln->getRefLength() < chr_pos_stop + distance) {
-                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-                    continue;
-                }
-
-
-                int diff;
-                int high_error_side = cal_high_error_side(event_aln, chr_pos_stop, distance, diff, tmp_aln);
-                if (high_error_side == 0) {
-                    mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-                    continue;
-                }
-                int alt_aln_score = map_read(tmp_aln, chr_start, chr_pos_start, isSameStrand, diff, distance, index, fasta);
-                if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
-                    alt_aln_score > -0.2 * distance) {
-                    read_str tmp;
-                    tmp.coordinates.second = coordinate_stop + diff;
-                    if (isSameStrand)
-                        tmp.coordinates.first = coordinate_start + diff;
-                    else tmp.coordinates.first - coordinate_start - diff;
-
-                    breakpoint->add_read(tmp, tmp_aln->getName());
-                }
-                //add to breakpoint
-
-
-
-                mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
-
-
-            }
-            cout << "num of read realignment:" << count << endl;
-            auto t1 = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::microseconds>( t1 - t0 ).count();
-            cout << "time for stop read: " << duration << endl;
-
-        }
-    }
-
-}
 
 
 std::string TRANS_type(char type) {
@@ -485,6 +339,38 @@ long get_ref_lengths(int id, RefVector ref) {
 	}
 	return length;
 }
+
+void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<BreakPointRealign> &bp_realn) {
+    auto point = breakpoint->get_coordinates();
+    vector<tra_str> pos_start;
+
+    vector<tra_str> pos_stop;
+
+    for (auto i = point.support.begin(); i != point.support.end(); ++i) {
+        store_tra_pos(pos_start, (*i).second, (*i).first, true);
+        store_tra_pos(pos_stop, (*i).second, (*i).first, false);
+    }
+
+    for (size_t i = 0; i < pos_start.size(); i++) {
+
+        if (pos_start[i].hits > Parameter::Instance()->min_support / 2) {
+
+            bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
+            pair<long, long> coordinate;
+            int max_start = 0, max_stop = 0;;
+            coordinate.first = get_max_pos(pos_start[i].map_pos, max_start);
+            coordinate.second = get_max_opp_pos(pos_start[i].map_pos[coordinate.first], max_stop);
+
+            BreakPointRealign start_bp(isSameStrand, coordinate, ref, breakpoint);
+            std::swap(coordinate.first, coordinate.second);
+            BreakPointRealign stop_bp(isSameStrand, coordinate, ref, breakpoint);
+
+            bp_realn.push_back(start_bp);
+            bp_realn.push_back(stop_bp);
+        }
+    }
+}
+
 
 bool should_be_stored(Breakpoint *& point) {
 	point->calc_support(); // we need that before:
@@ -656,16 +542,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				}
 			}
 		}
-//        int currentPosition = tmp_aln->getAlignment()->Position;
-//        if (!overlapAlignments.empty()) {
-//            Alignment *beginAlignment = overlapAlignments.front();
-//            while (beginAlignment->getAlignment()->Position + beginAlignment->getRefLength() < currentPosition) {
-//                overlapAlignments.pop_front();
-//                beginAlignment = overlapAlignments.front();
-//            }
-//        }
-//        overlapAlignments.push_back(tmp_aln->clone());
-		//get next read:
+
 		mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
 
 		num_reads++;
@@ -706,18 +583,88 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	size_t points_size = points.size();
 	cout << "points size:" << points_size << endl;
 
-    mapped_file->Rewind();
+
+    vector<BreakPointRealign> bp_realn;
     for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
         if (points[i]->get_SVtype() & TRA) {
             vector<Breakpoint *> new_points;
             cout << i << endl;
-            auto t1 = std::chrono::high_resolution_clock::now();
-            //find parallel reads along with breakpoints and realign the reads
-            realign_parallel_reads(points[i], ref, mapped_file);
-            auto t2 = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-            if (duration > 200000)
-                cout << "Align one point duration: " << duration << endl;
+            detect_bp_for_realn(points[i], ref, bp_realn);
+        }
+    }
+
+    mapped_file->Rewind();
+    std::sort(bp_realn.begin(), bp_realn.end());
+    vector<BreakPointRealign> active_bp;
+
+    auto i = bp_realn.begin();
+    mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+    int distance = min(100, Parameter::Instance()->min_length);
+    const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
+    std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
+
+    while (!tmp_aln->getQueryBases().empty() && i != bp_realn.end()) {
+        vector<differences_str> event_aln;
+        vector<indel_str> dels;
+        event_aln = tmp_aln->summarizeAlignment(dels);
+
+        while (i!=bp_realn.end()){
+            if (i->chr_idx.first != tmp_aln->getRefID())
+                break;
+            if (i->chr_pos.first-distance> tmp_aln->getPosition() &&
+                    i->chr_pos.first+distance < tmp_aln->getPosition() + tmp_aln->getRefLength())
+                active_bp.push_back(*i);
+            else break;
+            i++;
+        }
+
+        size_t num_rm = 0;
+        for (auto j = active_bp.begin();j != active_bp.end();j++){
+
+            if (j->chr_idx.first != tmp_aln->getRefID() ||
+                    j->chr_pos.first + distance < tmp_aln->getPosition()){
+                num_rm++;
+                continue;
+            } else break;
+        }
+
+        active_bp.erase(active_bp.begin(),active_bp.begin()+num_rm);
+
+        if (!active_bp.empty()){
+            for (auto j = active_bp.begin();j != active_bp.end();j++){
+                int diff;
+                bool exists_high_error_side = cal_high_error_side(event_aln, j->chr_pos.first, distance, diff, tmp_aln);
+                if (!exists_high_error_side) continue;
+                int alt_aln_score = map_read(tmp_aln, *j, diff, distance, index, fasta);
+                if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
+                    alt_aln_score > -0.2 * distance) {
+                    read_str tmp;
+                    if (j->coordinate.first > j->coordinate.second) {
+                        tmp.coordinates.first = j->coordinate.first + diff;
+                        if (j->isSameStrand)
+                            tmp.coordinates.second = j->coordinate.second + diff;
+                        else tmp.coordinates.second = j->coordinate.second - diff;
+                    } else {
+                        tmp.coordinates.second = j->coordinate.first + diff;
+                        if (j->isSameStrand)
+                            tmp.coordinates.first = j->coordinate.second + diff;
+                        else tmp.coordinates.first = j->coordinate.second - diff;
+                    }
+                    tmp.SV = TRA;
+                    tmp.type = 1;
+                    j->bp->add_read(tmp, tmp_aln->getName());
+                }
+            }
+
+        } else mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+
+        tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+    }
+
+
+    for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
+        if (points[i]->get_SVtype() & TRA) {
+            vector<Breakpoint *> new_points;
 
             detect_merged_svs(points[i]->get_coordinates(), ref, new_points);
             if (!new_points.empty()) {                            // I only allow for 1 split!!

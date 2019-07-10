@@ -38,6 +38,33 @@ struct tra_str{
 
 };
 
+struct BreakPointRealign{
+    bool isSameStrand;
+    pair<long, long> coordinate;
+    pair<long, long> chr_pos;
+    pair<std::string, std::string> chr;
+    pair<int, int> chr_idx;
+    Breakpoint * bp;
+
+    BreakPointRealign(bool isSameStrand, pair<long, long> coordinate, const RefVector ref, Breakpoint * breakpoint){
+        isSameStrand = isSameStrand;
+        coordinate = coordinate;
+        chr_pos.first = IPrinter::calc_pos(coordinate.first, ref, chr_idx.first);
+        chr_pos.second = IPrinter::calc_pos(coordinate.first, ref, chr_idx.second);
+        chr.first = ref[chr_idx.first].RefName;
+        chr.second =ref[chr_idx.first].RefName;
+
+        bp = breakpoint;
+    }
+
+    bool operator < (const BreakPointRealign& bp) const {
+        if (chr_idx.first == bp.chr_idx.first)
+            return chr_pos < bp.chr_pos;
+        else return chr_idx.first < bp.chr_idx.first;
+    }
+
+};
+
 
 void clarify(std::vector<Breakpoint *> & points);
 void detect_breakpoints(std::string filename, IPrinter *& printer);

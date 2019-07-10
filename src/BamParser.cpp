@@ -27,7 +27,6 @@ bool BamParser::Jump (int refID, int position){
     return reader.Jump(refID, position);
 }
 
-
 bool BamParser::Rewind() {
     return reader.Rewind();
 }
