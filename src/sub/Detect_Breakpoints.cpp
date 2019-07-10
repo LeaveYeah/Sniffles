@@ -499,9 +499,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 #pragma omp section
 						{
 							//		clock_t begin = clock();
-							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
-								aln_event = tmp_aln->get_events_Aln();
-							}
+//							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
+//								aln_event = tmp_aln->get_events_Aln();
+//							}
 							//		Parameter::Instance()->meassure_time(begin, " Alignment ");
 						}
 #pragma omp section
@@ -534,9 +534,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				}
 
 				//store the potential SVs:
-				if (!aln_event.empty()) {
-					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
-				}
+//				if (!aln_event.empty()) {
+//					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
+//				}
 				if (!split_events.empty()) {
 					add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
 					//realign the reads in overlapAlignments
@@ -605,7 +605,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     int distance = min(100, Parameter::Instance()->min_length);
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
-
+    num_reads = 0;
     while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
         if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {
             vector<differences_str> event_aln;
@@ -631,8 +631,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                     continue;
                 } else break;
             }
-
-            active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
+            if (num_rm != 0)
+                active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
@@ -662,6 +662,11 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 }
 
             } else mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+
+            num_reads++;
+            if (num_reads % 1000 == 0) {
+                cout << ref[tmp_aln->getRefID()].RefName << " " << tmp_aln->getPosition() << endl;
+            }
         }
         tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
     }
@@ -678,6 +683,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             }
         }
     }
+
 
     std::string chr;
 
