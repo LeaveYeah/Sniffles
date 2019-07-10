@@ -46,13 +46,13 @@ struct BreakPointRealign{
     pair<int, int> chr_idx;
     Breakpoint * bp;
 
-    BreakPointRealign(bool isSameStrand, pair<long, long> coordinate, const RefVector ref, Breakpoint * breakpoint){
-        isSameStrand = isSameStrand;
-        coordinate = coordinate;
+    BreakPointRealign(bool strand, pair<long, long> coor, const RefVector ref, Breakpoint * breakpoint){
+        isSameStrand = strand;
+        coordinate = coor;
         chr_pos.first = IPrinter::calc_pos(coordinate.first, ref, chr_idx.first);
-        chr_pos.second = IPrinter::calc_pos(coordinate.first, ref, chr_idx.second);
+        chr_pos.second = IPrinter::calc_pos(coordinate.second, ref, chr_idx.second);
         chr.first = ref[chr_idx.first].RefName;
-        chr.second =ref[chr_idx.first].RefName;
+        chr.second =ref[chr_idx.second].RefName;
 
         bp = breakpoint;
     }

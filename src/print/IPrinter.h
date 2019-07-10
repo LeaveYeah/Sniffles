@@ -18,6 +18,7 @@
 #include "../Genotyper/Genotyper.h"
 #include <math.h>
 
+
 double const uniform_variance = 0.2886751; //sqrt(1/12) see variance of uniform distribution -> std
 void write_read(Alignment * tmp_aln, FILE * & ref_allel_reads);
 class IPrinter {
