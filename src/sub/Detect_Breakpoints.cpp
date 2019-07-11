@@ -294,7 +294,6 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
 //    }
 //}
 
-
 std::string TRANS_type(char type) {
 	string tmp;
 	if (type & DEL) {

@@ -36,7 +36,6 @@ protected:
 	virtual void print_body(Breakpoint * &SV, RefVector ref)=0;
 	virtual void print_body_recall(Breakpoint * &SV, RefVector ref)=0;
 
-
 	std::string get_chr(long pos, RefVector ref);
 	std::string get_type(char type);
 	void sort_insert(int pos, std::vector<int> & positons);

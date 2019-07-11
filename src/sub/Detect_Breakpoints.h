@@ -65,7 +65,6 @@ struct BreakPointRealign{
 
 };
 
-
 void clarify(std::vector<Breakpoint *> & points);
 void detect_breakpoints(std::string filename, IPrinter *& printer);
 //void screen_for_events(Node * list,IntervallTree & bst ,TNode *&root, int cov, int lowMQ_cov,RefVector ref);
