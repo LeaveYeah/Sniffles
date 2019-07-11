@@ -606,6 +606,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
     num_reads = 0;
+    bool justJump = false;
     while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
         if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {
             vector<differences_str> event_aln;
@@ -635,6 +636,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 
             if (!active_bp.empty()) {
+                justJump = false;
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     int diff;
                     bool exists_high_error_side = cal_high_error_side(event_aln, j->chr_pos.first, distance, diff,
@@ -661,10 +663,22 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                     }
                 }
 
-            } else mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+            } else if (!justJump){
+                mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+                justJump = true;
+                std::cout << i->chr.first << " " << i->chr_pos.first << endl;
+            } else {
+                std::string i_chr = i->chr.first;
+                std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
+                if (std::stoi(i_chr.substr(3, i_chr.size())) < std::stoi(tmp_chr.substr(3, tmp_chr.size())) ||
+                        (i_chr == tmp_chr && i->chr_pos.first + distance < tmp_aln->getPosition())) {
+                    i++;
+                    justJump = false;
+                }
+            }
 
             num_reads++;
-            if (num_reads % 1000 == 0) {
+            if (num_reads % 10000 == 0) {
                 cout << ref[tmp_aln->getRefID()].RefName << " " << tmp_aln->getPosition() << endl;
             }
         }
