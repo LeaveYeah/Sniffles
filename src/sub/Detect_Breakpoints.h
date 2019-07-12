@@ -59,8 +59,9 @@ struct BreakPointRealign{
 
     bool operator < (const BreakPointRealign& bp) const {
         if (chr.first == bp.chr.first)
-            return chr_pos < bp.chr_pos;
-        else return std::stoi(chr.first.substr(3, chr.first.size())) < std::stoi(bp.chr.first.substr(3, bp.chr.first.size()));
+            return chr_pos.first < bp.chr_pos.first;
+//        else return std::stoi(chr.first.substr(3, chr.first.size())) < std::stoi(bp.chr.first.substr(3, bp.chr.first.size()));
+        else return chr_idx.first < bp.chr_idx.first;
     }
 
 };

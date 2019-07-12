@@ -249,14 +249,18 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
     if (!tmp_aln->high_error_side) tmp_aln->bp_read_pos -= distance; //lefthand side
     if (bp.isSameStrand != tmp_aln->high_error_side) bp.chr_pos.second -= distance;
 
-    TSequence reference = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
+    string ref_str = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
+    transform(ref_str.begin(), ref_str.end(), ref_str.begin(), ::toupper);
+    TSequence reference = ref_str;
     if (tmp_aln->bp_read_pos + distance > tmp_aln->getQueryBases().size())
         return -50;
     if (tmp_aln->bp_read_pos < 0)
         return -50;
     std::cout << bp.chr.second << " " << bp.chr_pos.second << endl;
     std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
-    TSequence sequence = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
+    string seq_str = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
+    transform(seq_str.begin(), seq_str.end(), seq_str.begin(), ::toupper);
+    TSequence sequence = seq_str;
     TStringSet sequences;
     appendValue(sequences, reference);
     appendValue(sequences, sequence);
@@ -659,7 +663,21 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                         }
                         tmp.SV = TRA;
                         tmp.type = 1;
-                        j->bp->add_read(tmp, tmp_aln->getName());
+
+                        std::cout << j->bp->get_coordinates().support.size() << endl;
+                        auto map = j->bp->get_coordinates().support;
+                        if (map.find(tmp_aln->getName()) ==
+                            map.end())
+                            j->bp->add_read(tmp, tmp_aln->getName());
+                        else
+                            j->bp->add_read(tmp, tmp_aln->getName()+"_extra");
+
+                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
+                        std::cout << j->bp->get_coordinates().support.size() << endl;
+                        for (auto i: j->bp->get_coordinates().support){
+                            std::cout << i.first << " " << i.second.coordinates.first << " "
+                             << i.second.coordinates.second << endl;
+                        }
                     }
                 }
 
@@ -671,7 +689,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 } else {
                     std::string i_chr = i->chr.first;
                     std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
-                    if (std::stoi(i_chr.substr(3, i_chr.size())) < std::stoi(tmp_chr.substr(3, tmp_chr.size())) ||
+                    if (i->chr_idx.first < tmp_aln->getRefID() ||
                         (i_chr == tmp_chr && i->chr_pos.first + distance < tmp_aln->getPosition())) {
                         i++;
                         justJump = false;
