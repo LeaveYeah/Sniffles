@@ -11,6 +11,7 @@
 #include "../Alignment.h"
 #include "../bioio.hpp"
 #include <chrono>
+#include <algorithm>
 
 void store_pos(vector<hist_str> &positions, long pos, std::string read_name) {
 	for (size_t i = 0; i < positions.size(); i++) {
@@ -248,15 +249,18 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
 
     if (!tmp_aln->high_error_side) tmp_aln->bp_read_pos -= distance; //lefthand side
     if (bp.isSameStrand != tmp_aln->high_error_side) bp.chr_pos.second -= distance;
-
-    TSequence reference = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
+    string ref_str = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
+    transform(ref_str.begin(), ref_str.end(), ref_str.begin(), ::toupper);
+    TSequence reference = ref_str;
     if (tmp_aln->bp_read_pos + distance > tmp_aln->getQueryBases().size())
         return -50;
     if (tmp_aln->bp_read_pos < 0)
         return -50;
     std::cout << bp.chr.second << " " << bp.chr_pos.second << endl;
     std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
-    TSequence sequence = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
+    string seq_str = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
+    transform(seq_str.begin(), seq_str.end(), seq_str.begin(), ::toupper);
+    TSequence sequence = seq_str;
     TStringSet sequences;
     appendValue(sequences, reference);
     appendValue(sequences, sequence);
