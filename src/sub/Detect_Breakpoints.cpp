@@ -601,6 +601,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
     tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
 
+
     int distance = min(100, Parameter::Instance()->min_length);
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
@@ -662,17 +663,19 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                     }
                 }
 
-            } else if (!justJump){
-                mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
-                justJump = true;
-                std::cout << i->chr.first << " " << i->chr_pos.first << endl;
-            } else {
-                std::string i_chr = i->chr.first;
-                std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
-                if (std::stoi(i_chr.substr(3, i_chr.size())) < std::stoi(tmp_chr.substr(3, tmp_chr.size())) ||
+            } else if (i != bp_realn.end()){
+                if (!justJump) {
+                    mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+                    justJump = true;
+                    std::cout << i->chr.first << " " << i->chr_pos.first << endl;
+                } else {
+                    std::string i_chr = i->chr.first;
+                    std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
+                    if (std::stoi(i_chr.substr(3, i_chr.size())) < std::stoi(tmp_chr.substr(3, tmp_chr.size())) ||
                         (i_chr == tmp_chr && i->chr_pos.first + distance < tmp_aln->getPosition())) {
-                    i++;
-                    justJump = false;
+                        i++;
+                        justJump = false;
+                    }
                 }
             }
 
@@ -682,6 +685,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             }
         }
         tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+
     }
 
 
@@ -705,6 +709,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 		if (points[i]->get_SVtype() & TRA) {
 			points[i]->calc_support();
 			points[i]->predict_SV();
+
 		}
 		if (points[i]->get_support() >= Parameter::Instance()->min_support && points[i]->get_length() > Parameter::Instance()->min_length) {
 			printer->printSV(points[i]);
