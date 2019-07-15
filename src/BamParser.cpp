@@ -18,6 +18,7 @@ BamParser::BamParser(string file){
 
 }
 
+
 bool BamParser::setRegion(const int &leftRefID, const int &leftPosition,
         const int &rightRefID, const int &rightPosition){
     return reader.SetRegion(leftRefID, leftPosition, rightRefID, rightPosition);

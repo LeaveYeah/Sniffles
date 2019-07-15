@@ -11,7 +11,6 @@
 #include "../Alignment.h"
 #include "../bioio.hpp"
 #include <chrono>
-#include <algorithm>
 
 void store_pos(vector<hist_str> &positions, long pos, std::string read_name) {
 	for (size_t i = 0; i < positions.size(); i++) {
@@ -249,6 +248,7 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
 
     if (!tmp_aln->high_error_side) tmp_aln->bp_read_pos -= distance; //lefthand side
     if (bp.isSameStrand != tmp_aln->high_error_side) bp.chr_pos.second -= distance;
+
     string ref_str = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
     transform(ref_str.begin(), ref_str.end(), ref_str.begin(), ::toupper);
     TSequence reference = ref_str;
@@ -297,7 +297,6 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
 //        ev.type = al->CigarData[i].Length * -1; //insertion
 //    }
 //}
-
 
 std::string TRANS_type(char type) {
 	string tmp;
@@ -606,6 +605,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
     tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
 
+
     int distance = min(100, Parameter::Instance()->min_length);
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
@@ -663,21 +663,37 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                         }
                         tmp.SV = TRA;
                         tmp.type = 1;
-                        j->bp->add_read(tmp, tmp_aln->getName());
+
+                        std::cout << j->bp->get_coordinates().support.size() << endl;
+                        auto map = j->bp->get_coordinates().support;
+                        if (map.find(tmp_aln->getName()) ==
+                            map.end())
+                            j->bp->add_read(tmp, tmp_aln->getName());
+                        else
+                            j->bp->add_read(tmp, tmp_aln->getName()+"_extra");
+
+                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
+                        std::cout << j->bp->get_coordinates().support.size() << endl;
+                        for (auto i: j->bp->get_coordinates().support){
+                            std::cout << i.first << " " << i.second.coordinates.first << " "
+                             << i.second.coordinates.second << endl;
+                        }
                     }
                 }
 
-            } else if (!justJump){
-                mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
-                justJump = true;
-                std::cout << i->chr.first << " " << i->chr_pos.first << endl;
-            } else {
-                std::string i_chr = i->chr.first;
-                std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
-                if (std::stoi(i_chr.substr(3, i_chr.size())) < std::stoi(tmp_chr.substr(3, tmp_chr.size())) ||
+            } else if (i != bp_realn.end()){
+                if (!justJump) {
+                    mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
+                    justJump = true;
+                    std::cout << i->chr.first << " " << i->chr_pos.first << endl;
+                } else {
+                    std::string i_chr = i->chr.first;
+                    std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
+                    if (i->chr_idx.first < tmp_aln->getRefID() ||
                         (i_chr == tmp_chr && i->chr_pos.first + distance < tmp_aln->getPosition())) {
-                    i++;
-                    justJump = false;
+                        i++;
+                        justJump = false;
+                    }
                 }
             }
 
@@ -687,6 +703,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             }
         }
         tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
+
     }
 
 
@@ -710,6 +727,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 		if (points[i]->get_SVtype() & TRA) {
 			points[i]->calc_support();
 			points[i]->predict_SV();
+
 		}
 		if (points[i]->get_support() >= Parameter::Instance()->min_support && points[i]->get_length() > Parameter::Instance()->min_length) {
 			printer->printSV(points[i]);
