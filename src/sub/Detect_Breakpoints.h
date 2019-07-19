@@ -38,6 +38,7 @@ struct tra_str{
 
 };
 
+
 struct BreakPointRealign{
     bool isSameStrand;
     pair<long, long> coordinate;

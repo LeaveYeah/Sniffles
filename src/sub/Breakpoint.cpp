@@ -190,7 +190,10 @@ void Breakpoint::add_read(Breakpoint * point) { //point = one read support!
 		std::map<std::string, read_str> support = point->get_coordinates().support;
 		this->set_refcount(max(point->get_refcount(), this->get_refcount())); //set ref count!
 		for (std::map<std::string, read_str>::iterator i = support.begin(); i != support.end(); i++) {
-			this->positions.support[(*i).first] = (*i).second;
+		    auto map = this->positions.support;
+		    if (map.find((*i).first) == map.end())
+			    this->positions.support[(*i).first] = (*i).second;
+		    else this->positions.support[(*i).first + "_ext"] = (*i).second;
 		}
 	}
 }

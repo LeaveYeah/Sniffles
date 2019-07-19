@@ -73,14 +73,21 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 
 		store_pos(pos_start, (*i).second.coordinates.first, (*i).first);
 		store_pos(pos_stop, (*i).second.coordinates.second, (*i).first);
-	}
+//		string chr_start, chr_stop;
+//		long pos_start = IPrinter::calc_pos((*i).second.coordinates.first, ref, chr_start);
+//        long pos_stop = IPrinter::calc_pos((*i).second.coordinates.second, ref, chr_stop);
+//        std::cout << (*i).first << endl;
+//        std::cout << chr_start << " " << pos_start << endl;
+//        std::cout << chr_stop << " " << pos_stop << endl;
 
+	}
+    vector<size_t> start_idx, stop_idx;
 	int start_count = 0;
 	for (size_t i = 0; i < pos_start.size(); i++) {
 		//std::cout<<pos_start[i].hits <<",";
 		if (pos_start[i].hits > Parameter::Instance()->min_support) {
 			start_count++;
-
+        start_idx.push_back(i);
 		}
 
 	}
@@ -89,16 +96,17 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 		//	std::cout << pos_stop[i].hits << ",";
 		if (pos_stop[i].hits > Parameter::Instance()->min_support) {
 			stop_count++;
+            start_idx.push_back(i);
 		}
 	}
 	if (stop_count > 1 || start_count > 1) {
 		std::cout << "\tprocessing merged TRA" << std::endl;
 		if (start_count > 1) {
-			new_points.push_back(split_points(pos_start[0].names, point.support));
-			new_points.push_back(split_points(pos_start[1].names, point.support));
+			new_points.push_back(split_points(pos_start[start_idx[0]].names, point.support));
+			new_points.push_back(split_points(pos_start[start_idx[1]].names, point.support));
 		} else {
-			new_points.push_back(split_points(pos_stop[0].names, point.support));
-			new_points.push_back(split_points(pos_stop[1].names, point.support));
+			new_points.push_back(split_points(pos_stop[stop_idx[0]].names, point.support));
+			new_points.push_back(split_points(pos_stop[stop_idx[1]].names, point.support));
 		}
 	}
 }
@@ -358,11 +366,11 @@ void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<Br
 
     for (size_t i = 0; i < pos_start.size(); i++) {
 
-        if (pos_start[i].hits > Parameter::Instance()->min_support / 2) {
+        if (pos_start[i].hits >= Parameter::Instance()->min_support / 2) {
 
             bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
             pair<long, long> coordinate;
-            int max_start = 0, max_stop = 0;;
+            int max_start = 0, max_stop = 0;
             coordinate.first = get_max_pos(pos_start[i].map_pos, max_start);
             coordinate.second = get_max_opp_pos(pos_start[i].map_pos[coordinate.first], max_stop);
 
@@ -375,7 +383,6 @@ void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<Br
         }
     }
 }
-
 
 bool should_be_stored(Breakpoint *& point) {
 	point->calc_support(); // we need that before:
@@ -453,6 +460,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	while (!tmp_aln->getQueryBases().empty()) {
 
 		if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {	// && (Parameter::Instance()->chr_names.empty() || Parameter::Instance()->chr_names.find(ref[tmp_aln->getRefID()].RefName) != Parameter::Instance()->chr_names.end())) {
+                if (tmp_aln->getName() == "249b74ed_89910_0"){
+                    int i = 0;
+                };
 
 			//change CHR:
 			if (current_RefID != tmp_aln->getRefID()) {
@@ -502,9 +512,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 #pragma omp section
 						{
 							//		clock_t begin = clock();
-//							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
-//								aln_event = tmp_aln->get_events_Aln();
-//							}
+							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
+								aln_event = tmp_aln->get_events_Aln();
+							}
 							//		Parameter::Instance()->meassure_time(begin, " Alignment ");
 						}
 #pragma omp section
@@ -537,9 +547,9 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 				}
 
 				//store the potential SVs:
-//				if (!aln_event.empty()) {
-//					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
-//				}
+				if (!aln_event.empty()) {
+					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
+				}
 				if (!split_events.empty()) {
 					add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
 					//realign the reads in overlapAlignments
@@ -592,7 +602,6 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     vector<BreakPointRealign> bp_realn;
     for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
         if (points[i]->get_SVtype() & TRA) {
-            cout << i << endl;
             detect_bp_for_realn(points[i], ref, bp_realn);
         }
     }
@@ -664,7 +673,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                         tmp.SV = TRA;
                         tmp.type = 1;
 
-                        std::cout << j->bp->get_coordinates().support.size() << endl;
+//                        std::cout << j->bp->get_coordinates().support.size() << endl;
                         auto map = j->bp->get_coordinates().support;
                         if (map.find(tmp_aln->getName()) ==
                             map.end())
@@ -672,12 +681,12 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                         else
                             j->bp->add_read(tmp, tmp_aln->getName()+"_extra");
 
-                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
-                        std::cout << j->bp->get_coordinates().support.size() << endl;
-                        for (auto i: j->bp->get_coordinates().support){
-                            std::cout << i.first << " " << i.second.coordinates.first << " "
-                             << i.second.coordinates.second << endl;
-                        }
+//                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
+//                        std::cout << j->bp->get_coordinates().support.size() << endl;
+//                        for (auto i: j->bp->get_coordinates().support){
+//                            std::cout << i.first << " " << i.second.coordinates.first << " "
+//                             << i.second.coordinates.second << endl;
+//                        }
                     }
                 }
 
@@ -685,7 +694,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 if (!justJump) {
                     mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
                     justJump = true;
-                    std::cout << i->chr.first << " " << i->chr_pos.first << endl;
+//                    std::cout << i->chr.first << " " << i->chr_pos.first << endl;
                 } else {
                     std::string i_chr = i->chr.first;
                     std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
@@ -732,6 +741,19 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 		if (points[i]->get_support() >= Parameter::Instance()->min_support && points[i]->get_length() > Parameter::Instance()->min_length) {
 			printer->printSV(points[i]);
 		}
+
+        string chr_start, chr_stop;
+        long pos_start = IPrinter::calc_pos(points[i]->get_coordinates().start.most_support, ref, chr_start);
+        long pos_stop = IPrinter::calc_pos(points[i]->get_coordinates().stop.most_support, ref, chr_stop);
+        std::cout << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
+        std::cout << "Number of support: " << points[i]->get_support() << endl;
+        for (auto j :points[i]->get_coordinates().support){
+            string chr_start, chr_stop;
+            long pos_start = IPrinter::calc_pos(j.second.coordinates.first, ref, chr_start);
+            long pos_stop = IPrinter::calc_pos(j.second.coordinates.second, ref, chr_stop);
+            std::cout << j.first << " " << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
+        }
+        std::cout << endl;
 	}
 	//std::cout<<"Done"<<std::endl;
 	if (Parameter::Instance()->genotype) {
