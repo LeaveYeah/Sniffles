@@ -87,7 +87,7 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 		//std::cout<<pos_start[i].hits <<",";
 		if (pos_start[i].hits > Parameter::Instance()->min_support) {
 			start_count++;
-        start_idx.push_back(i);
+            start_idx.push_back(i);
 		}
 
 	}
@@ -96,7 +96,7 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 		//	std::cout << pos_stop[i].hits << ",";
 		if (pos_stop[i].hits > Parameter::Instance()->min_support) {
 			stop_count++;
-            start_idx.push_back(i);
+            stop_idx.push_back(i);
 		}
 	}
 	if (stop_count > 1 || start_count > 1) {
@@ -184,6 +184,8 @@ long get_max_opp_pos(vector<long> opp_pos, int &max){
 }
 
 bool cal_high_error_side(vector<differences_str> &event_aln, long pos, long distance, int& diff, Alignment * tmp_aln){
+    if (event_aln.empty())
+        return false;
     for (size_t j = 0; j < event_aln.size(); j++) {
         if (event_aln[j].type == 0)
             fix_mismatch_read_pos(event_aln, j, tmp_aln);
@@ -264,8 +266,8 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
         return -50;
     if (tmp_aln->bp_read_pos < 0)
         return -50;
-    std::cout << bp.chr.second << " " << bp.chr_pos.second << endl;
-    std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
+//    std::cout << bp.chr.second << " " << bp.chr_pos.second << endl;
+//    std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
     string seq_str = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
     transform(seq_str.begin(), seq_str.end(), seq_str.begin(), ::toupper);
     TSequence sequence = seq_str;
@@ -284,10 +286,10 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
     assignSource(row(align, 0), reference);
     assignSource(row(align, 1), sequence);
 //    int score = globalAlignment(align,  MyersBitVector());
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-
-    std::cout << "Time for one alignment :" << duration << endl;
+//    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+//    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+//
+//    std::cout << "Time for one alignment :" << duration << endl;
     return score;
 
 }
@@ -622,10 +624,11 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     bool justJump = false;
     while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
         if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {
+//            std::cout << ref[tmp_aln->getRefID()].RefName << " " << tmp_aln->getPosition() << endl;
+//            cout << "step0" << endl;
             vector<differences_str> event_aln;
             vector<indel_str> dels;
             event_aln = tmp_aln->summarizeAlignment(dels);
-
             while (i != bp_realn.end()) {
                 if (i->chr_idx.first != tmp_aln->getRefID())
                     break;
@@ -635,7 +638,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 else break;
                 i++;
             }
-
+//            cout << "step1" << endl;
             size_t num_rm = 0;
             for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
 
@@ -645,15 +648,19 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                     continue;
                 } else break;
             }
-            if (num_rm != 0)
+//            cout << "step2" << endl;
+            if (num_rm != 0) {
+//                cout << "before step2.1" << endl;
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
-
+//                cout << "after step2.1" << endl;
+            }
             if (!active_bp.empty()) {
                 justJump = false;
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     int diff;
                     bool exists_high_error_side = cal_high_error_side(event_aln, j->chr_pos.first, distance, diff,
                                                                       tmp_aln);
+//                    cout << "step2.2" << endl;
                     if (!exists_high_error_side) continue;
                     int alt_aln_score = map_read(tmp_aln, *j, diff, distance, index, fasta);
                     if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
@@ -689,7 +696,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 //                        }
                     }
                 }
-
+//                cout << "step3" << endl;
             } else if (i != bp_realn.end()){
                 if (!justJump) {
                     mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
@@ -747,12 +754,12 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
         long pos_stop = IPrinter::calc_pos(points[i]->get_coordinates().stop.most_support, ref, chr_stop);
         std::cout << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
         std::cout << "Number of support: " << points[i]->get_support() << endl;
-        for (auto j :points[i]->get_coordinates().support){
-            string chr_start, chr_stop;
-            long pos_start = IPrinter::calc_pos(j.second.coordinates.first, ref, chr_start);
-            long pos_stop = IPrinter::calc_pos(j.second.coordinates.second, ref, chr_stop);
-            std::cout << j.first << " " << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
-        }
+//        for (auto j :points[i]->get_coordinates().support){
+//            string chr_start, chr_stop;
+//            long pos_start = IPrinter::calc_pos(j.second.coordinates.first, ref, chr_start);
+//            long pos_stop = IPrinter::calc_pos(j.second.coordinates.second, ref, chr_stop);
+//            std::cout << j.first << " " << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
+//        }
         std::cout << endl;
 	}
 	//std::cout<<"Done"<<std::endl;
