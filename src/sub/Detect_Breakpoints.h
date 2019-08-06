@@ -40,6 +40,7 @@ struct tra_str{
 
 
 struct BreakPointRealign{
+//    int originalSupport;
     bool isSameStrand;
     pair<long, long> coordinate;
     pair<long, long> chr_pos;

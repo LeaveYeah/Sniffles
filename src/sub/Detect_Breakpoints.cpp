@@ -368,7 +368,7 @@ void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<Br
 
     for (size_t i = 0; i < pos_start.size(); i++) {
 
-        if (pos_start[i].hits >= Parameter::Instance()->min_support / 2) {
+        if (pos_start[i].hits >= Parameter::Instance()->min_support / 3) {
 
             bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
             pair<long, long> coordinate;
@@ -754,12 +754,12 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
         long pos_stop = IPrinter::calc_pos(points[i]->get_coordinates().stop.most_support, ref, chr_stop);
         std::cout << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
         std::cout << "Number of support: " << points[i]->get_support() << endl;
-//        for (auto j :points[i]->get_coordinates().support){
-//            string chr_start, chr_stop;
-//            long pos_start = IPrinter::calc_pos(j.second.coordinates.first, ref, chr_start);
-//            long pos_stop = IPrinter::calc_pos(j.second.coordinates.second, ref, chr_stop);
-//            std::cout << j.first << " " << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
-//        }
+        for (auto j :points[i]->get_coordinates().support){
+            string chr_start, chr_stop;
+            long pos_start = IPrinter::calc_pos(j.second.coordinates.first, ref, chr_start);
+            long pos_stop = IPrinter::calc_pos(j.second.coordinates.second, ref, chr_stop);
+            std::cout << j.first << " " << chr_start << " " << pos_start << " " << chr_stop << " " << pos_stop << endl;
+        }
         std::cout << endl;
 	}
 	//std::cout<<"Done"<<std::endl;
