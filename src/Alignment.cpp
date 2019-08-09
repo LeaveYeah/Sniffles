@@ -742,6 +742,7 @@ vector<aln_str> Alignment::getSA(RefVector ref) {
 		tmp.mq = this->getMappingQual();
 		tmp.pos = (long) this->getPosition(); //+get_ref_lengths(tmp.RefID, ref);
 		tmp.strand = getStrand();
+		tmp.isMain = true;
 		uint32_t sv;
 		al->GetTag("SV", sv);
 		tmp.cross_N = ((sv & Ns_CLIPPED));
@@ -762,6 +763,7 @@ vector<aln_str> Alignment::getSA(RefVector ref) {
 		std::string chr;
 		bool nested = true;
 		while (i < sa.size()) {
+		    tmp.isMain = false;
 			if (count == 0 && sa[i] != ',') {
 				chr += sa[i];
 			}

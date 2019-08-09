@@ -68,6 +68,7 @@ struct aln_str{
 	int read_pos_start;
 	int read_pos_stop;
 	bool cross_N;
+	bool isMain;
 };
 
 class Alignment {
