@@ -67,70 +67,116 @@ GCC Path:
 /projects/bsi/gentools/src/gcc/v4.9.4/bin/gcc
 
 Scratch:
-int start = IPrinter::calc_pos(SV->get_coordinates().start.most_support, ref, chr);
+//through reads
 
-void add_map(long pos, std::map<long, int> map){
-    if (map.find(pos) == map.end() map[pos] = 1;
-    else map[pos]++;
+
+void add_realign_read(BreakPointRealign bp_realign){
+    read_str tmp;
+    if (bp_realign.coordinate.first < bp_realign.coordinate.second) {
+        tmp.coordinates.first = bp_realign.coordinate.first + diff;
+        if (bp_realign.isSameStrand)
+            tmp.coordinates.second = bp_realign.coordinate.second + diff;
+        else tmp.coordinates.second = bp_realign.coordinate.second - diff;
+    } else {
+        tmp.coordinates.second = bp_realign.coordinate.first + diff;
+        if (bp_realign.isSameStrand)
+            tmp.coordinates.first = bp_realign.coordinate.second + diff;
+        else tmp.coordinates.first = bp_realign.coordinate.second - diff;
+    }
+    tmp.SV = TRA;
+    tmp.type = 1;
+
+//                        std::cout << bp_realign.bp->get_coordinates().support.size() << endl;
+    auto map = bp_realign.bp->get_coordinates().support;
+    if (map.find(tmp_aln->getName()) == map.end())
+        bp_realign.bp->add_read(tmp, tmp_aln->getName());
+    else
+        bp_realign.bp->add_read(tmp, tmp_aln->getName() + "_extra");}
 }
-void store_tra_pos(vector<tra_str> &positions, read_str read, std::string read_name) {
-    for (size_t i = 0; i < positions.size(); i++) {
-        if (abs(positions[i].position - read.coordinates.first) < Parameter::Instance()->min_length) {
-            positions[i].hits++;
-            positions[i].names.push_back(read_name);
-            add_map(read.coordinates.first, positions[i].starts)
-            add_map(read.coordinates.second, positions[i].stops)
-            if (read.read_strand.first == read.read_strand.second)
-                positions[i].sameStrand_hits++;
-            else positions[i].diffStrand_hits++;
-            return;
+bool detect_gaps(Alignment* tmp_aln, BreakPointRealign bp_realign, int &diff) {
+    std::vector <aln_str> split_events = tmp_aln->getSA(ref);
+    for (auto i: split_events) {
+        if (i->isMain) {
+            if (abs(i->pos - bp_realign.chr_pos.first) < distance) {
+                diff = i->pos - bp_realign.chr_pos.first;
+                tmp_aln->high_error_side = false;
+                if (i->strand) tmp_aln->bp_read_pos = i->read_pos_start;
+                else tmp_aln->bp_read_pos = i->read_pos_stop;
+                return true;
+            } else if (abs(i->pos + i->length - bp_realign.chr_pos.first) < distance) {
+                diff = i->pos + i->length - bp_realign.chr_pos.first;
+                tmp_aln->high_error_side = true;
+                if (i->strand) tmp_aln->bp_read_pos = i->read_pos_stop;
+                else tmp_aln->bp_read_pos = i->read_pos_start;
+                return true;
+            }
         }
     }
-    tra_str tmp;
-    tmp.position = read.coordinates.first;
-    tmp.hits = 1;
-    tmp.names.push_back(read_name);
-    add_map(read.coordinates.first, tmp.starts)
-    add_map(read.coordinates.second, tmp.stops)
-    if (read.read_strand.first == read.read_strand.second)
-        tmp.sameStrand_hits = 1;
-    else tmp.diffStrand_hits = 1;
-    positions.push_back(tmp);
-}
-
-void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> & new_points) {
-    new_points.clear(); //just in case!
-    vector<tra_str> pos_start;
-    for (std::map<std::string, read_str>::iterator i = point.support.begin(); i != point.support.end(); ++i) {
-        store_tra_pos(pos_start, (*i).second, (*i).first);
-    }
-
-    int start_count = 0;
-    for (size_t i = 0; i < pos_start.size(); i++) {
-        //std::cout<<pos_start[i].hits <<",";
-        if ((pos_start[i].hits > Parameter::Instance()->min_support / 2)
-                && (pos_start[i].hits <= Parameter::Instance()->min_support)) {
-            //do realignment, determine the start and the end the realignment
-
-        }
-    }
-    int stop_count = 0;
-    for (size_t i = 0; i < pos_stop.size(); i++) {
-        //	std::cout << pos_stop[i].hits << ",";
-        if (pos_stop[i].hits > Parameter::Instance()->min_support) {
-            stop_count++;
-        }
-    }
-    if (stop_count > 1 || start_count > 1) {
-        std::cout << "\tprocessing merged TRA" << std::endl;
-        if (start_count > 1) {
-            new_points.push_back(split_points(pos_start[0].names, point.support));
-            new_points.push_back(split_points(pos_start[1].names, point.support));
-        } else {
-            new_points.push_back(split_points(pos_stop[0].names, point.support));
-            new_points.push_back(split_points(pos_stop[1].names, point.support));
-        }
-    }
+    return false;
 }
 
 
+void realign_read(BreakPointRealign bp_realign, vector<aln_str> &event_aln, Alignment* tmp_aln,
+        const bioio::FastaIndex  index, std::ifstream & fasta) {
+    int distance = min(100, Parameter::Instance()->min_length);
+    int diff;
+    if (bp_realign.chr_pos.first - distance <= tmp_aln->getPosition() ||
+        bp_realign.chr_pos.first + distance >= tmp_aln->getPosition() + tmp_aln->getRefLength()) {
+        auto map = bp_realign.bp->get_coordinates().support;
+        if (map.find(tmp_aln->getName()) != map.end()) return;
+
+    } else {
+
+        bool exists_high_error_side = cal_high_error_side(event_aln, bp_realign.chr_pos.first, distance, diff, tmp_aln);
+        if (!exists_high_error_side) return;
+        int alt_aln_score = map_read(tmp_aln, bp_realign, diff, distance, index, fasta);
+        if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
+            alt_aln_score > -0.2 * distance) {
+            add_realign_read(bp_realign);
+        }
+    }
+}
+
+
+//
+int diff;
+bool exists_high_error_side = cal_high_error_side(event_aln, j->chr_pos.first, distance, diff,
+                                                  tmp_aln);
+//                    cout << "step2.2" << endl;
+if (!exists_high_error_side) continue;
+int alt_aln_score = map_read(tmp_aln, *j, diff, distance, index, fasta);
+if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
+alt_aln_score > -0.2 * distance) {
+read_str tmp;
+if (j->coordinate.first < j->coordinate.second) {
+tmp.coordinates.first = j->coordinate.first + diff;
+if (j->isSameStrand)
+tmp.coordinates.second = j->coordinate.second + diff;
+else tmp.coordinates.second = j->coordinate.second - diff;
+} else {
+tmp.coordinates.second = j->coordinate.first + diff;
+if (j->isSameStrand)
+tmp.coordinates.first = j->coordinate.second + diff;
+else tmp.coordinates.first = j->coordinate.second - diff;
+}
+tmp.SV = TRA;
+tmp.type = 1;
+
+//                        std::cout << j->bp->get_coordinates().support.size() << endl;
+auto map = j->bp->get_coordinates().support;
+if (map.find(tmp_aln->getName()) ==
+map.end())
+j->bp->add_read(tmp, tmp_aln->getName());
+else
+j->bp->add_read(tmp, tmp_aln->getName()+"_extra");
+
+//                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
+//                        std::cout << j->bp->get_coordinates().support.size() << endl;
+//                        for (auto i: j->bp->get_coordinates().support){
+//                            std::cout << i.first << " " << i.second.coordinates.first << " "
+//                             << i.second.coordinates.second << endl;
+//                        }
+}
+
+if (j->chr_idx.first != tmp_aln->getRefID() || j->chr_pos.first - distance < tmp_aln->getPosition() ||
+j->chr_pos.first + distance < tmp_aln->getPosition()) {
