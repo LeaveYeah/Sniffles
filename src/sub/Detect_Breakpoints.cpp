@@ -414,6 +414,44 @@ void polish_points(std::vector<Breakpoint *> & points, RefVector ref) { //TODO m
 	}
 }
 
+void realign_read(BreakPointRealign bp_realign, vector<differences_str> &event_aln, Alignment* tmp_aln,
+                  const bioio::FastaIndex  index, std::ifstream & fasta) {
+    int distance = min(100, Parameter::Instance()->min_length);
+    if (bp_realign.chr_pos.first - distance <= tmp_aln->getPosition() ||
+        bp_realign.chr_pos.first + distance >= tmp_aln->getPosition() + tmp_aln->getRefLength())
+        return;
+    int diff;
+    bool exists_high_error_side = cal_high_error_side(event_aln, bp_realign.chr_pos.first, distance, diff, tmp_aln);
+    if (!exists_high_error_side) return;
+
+    int alt_aln_score = map_read(tmp_aln, bp_realign, diff, distance, index, fasta);
+    if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
+        alt_aln_score > -0.2 * distance) {
+        read_str tmp;
+        if (bp_realign.coordinate.first < bp_realign.coordinate.second) {
+            tmp.coordinates.first = bp_realign.coordinate.first + diff;
+            if (bp_realign.isSameStrand)
+                tmp.coordinates.second = bp_realign.coordinate.second + diff;
+            else tmp.coordinates.second = bp_realign.coordinate.second - diff;
+        } else {
+            tmp.coordinates.second = bp_realign.coordinate.first + diff;
+            if (bp_realign.isSameStrand)
+                tmp.coordinates.first = bp_realign.coordinate.second + diff;
+            else tmp.coordinates.first = bp_realign.coordinate.second - diff;
+        }
+        tmp.SV = TRA;
+        tmp.type = 1;
+
+//                        std::cout << bp_realign.bp->get_coordinates().support.size() << endl;
+        auto map = bp_realign.bp->get_coordinates().support;
+        if (map.find(tmp_aln->getName()) ==
+            map.end())
+            bp_realign.bp->add_read(tmp, tmp_aln->getName());
+        else
+            bp_realign.bp->add_read(tmp, tmp_aln->getName() + "_extra");
+    }
+}
+
 
 void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 
@@ -462,9 +500,6 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	while (!tmp_aln->getQueryBases().empty()) {
 
 		if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {	// && (Parameter::Instance()->chr_names.empty() || Parameter::Instance()->chr_names.find(ref[tmp_aln->getRefID()].RefName) != Parameter::Instance()->chr_names.end())) {
-                if (tmp_aln->getName() == "249b74ed_89910_0"){
-                    int i = 0;
-                };
 
 			//change CHR:
 			if (current_RefID != tmp_aln->getRefID()) {
@@ -616,14 +651,12 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
     mapped_file->Jump(i->chr_idx.first, i->chr_pos.first);
     tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
 
-
-    int distance = min(100, Parameter::Instance()->min_length);
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
     num_reads = 0;
     bool justJump = false;
     while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
-        if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {
+        if (tmp_aln->get_is_save()) {
 //            std::cout << ref[tmp_aln->getRefID()].RefName << " " << tmp_aln->getPosition() << endl;
 //            cout << "step0" << endl;
             vector<differences_str> event_aln;
@@ -632,8 +665,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             while (i != bp_realn.end()) {
                 if (i->chr_idx.first != tmp_aln->getRefID())
                     break;
-                if (i->chr_pos.first - distance > tmp_aln->getPosition() &&
-                    i->chr_pos.first + distance < tmp_aln->getPosition() + tmp_aln->getRefLength())
+                if (i->chr_pos.first> tmp_aln->getPosition() &&
+                    i->chr_pos.first < tmp_aln->getPosition() + tmp_aln->getRefLength())
                     active_bp.push_back(*i);
                 else break;
                 i++;
@@ -642,8 +675,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             size_t num_rm = 0;
             for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
 
-                if (j->chr_idx.first != tmp_aln->getRefID() || j->chr_pos.first - distance < tmp_aln->getPosition() ||
-                    j->chr_pos.first + distance < tmp_aln->getPosition()) {
+                if (j->chr_idx.first != tmp_aln->getRefID() || j->chr_pos.first  < tmp_aln->getPosition()) {
                     num_rm++;
                     continue;
                 } else break;
@@ -657,44 +689,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             if (!active_bp.empty()) {
                 justJump = false;
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
-                    int diff;
-                    bool exists_high_error_side = cal_high_error_side(event_aln, j->chr_pos.first, distance, diff,
-                                                                      tmp_aln);
-//                    cout << "step2.2" << endl;
-                    if (!exists_high_error_side) continue;
-                    int alt_aln_score = map_read(tmp_aln, *j, diff, distance, index, fasta);
-                    if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
-                        alt_aln_score > -0.2 * distance) {
-                        read_str tmp;
-                        if (j->coordinate.first < j->coordinate.second) {
-                            tmp.coordinates.first = j->coordinate.first + diff;
-                            if (j->isSameStrand)
-                                tmp.coordinates.second = j->coordinate.second + diff;
-                            else tmp.coordinates.second = j->coordinate.second - diff;
-                        } else {
-                            tmp.coordinates.second = j->coordinate.first + diff;
-                            if (j->isSameStrand)
-                                tmp.coordinates.first = j->coordinate.second + diff;
-                            else tmp.coordinates.first = j->coordinate.second - diff;
-                        }
-                        tmp.SV = TRA;
-                        tmp.type = 1;
-
-//                        std::cout << j->bp->get_coordinates().support.size() << endl;
-                        auto map = j->bp->get_coordinates().support;
-                        if (map.find(tmp_aln->getName()) ==
-                            map.end())
-                            j->bp->add_read(tmp, tmp_aln->getName());
-                        else
-                            j->bp->add_read(tmp, tmp_aln->getName()+"_extra");
-
-//                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
-//                        std::cout << j->bp->get_coordinates().support.size() << endl;
-//                        for (auto i: j->bp->get_coordinates().support){
-//                            std::cout << i.first << " " << i.second.coordinates.first << " "
-//                             << i.second.coordinates.second << endl;
-//                        }
-                    }
+                    realign_read(*j, event_aln, tmp_aln, index, fasta);
                 }
 //                cout << "step3" << endl;
             } else if (i != bp_realn.end()){
@@ -706,7 +701,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                     std::string i_chr = i->chr.first;
                     std::string tmp_chr = ref[tmp_aln->getRefID()].RefName;
                     if (i->chr_idx.first < tmp_aln->getRefID() ||
-                        (i_chr == tmp_chr && i->chr_pos.first + distance < tmp_aln->getPosition())) {
+                        (i_chr == tmp_chr && i->chr_pos.first < tmp_aln->getPosition())) {
                         i++;
                         justJump = false;
                     }
