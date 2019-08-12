@@ -369,6 +369,7 @@ void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<Br
     for (size_t i = 0; i < pos_start.size(); i++) {
 
         if (pos_start[i].hits >= Parameter::Instance()->min_support / 3) {
+//        if (pos_start[i].hits >= 1) {
 
             bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
             pair<long, long> coordinate;
@@ -576,7 +577,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	while (!tmp_aln->getQueryBases().empty()) {
 
 		if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {	// && (Parameter::Instance()->chr_names.empty() || Parameter::Instance()->chr_names.find(ref[tmp_aln->getRefID()].RefName) != Parameter::Instance()->chr_names.end())) {
-
+            if (tmp_aln->getPosition() > 190000)
+                int kdjf = 0;
 			//change CHR:
 			if (current_RefID != tmp_aln->getRefID()) {
 
@@ -753,7 +755,6 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 
                 if (j->chr_idx.first != tmp_aln->getRefID() || j->chr_pos.first + distance < tmp_aln->getPosition()) {
                     num_rm++;
-                    continue;
                 } else break;
             }
 //            cout << "step2" << endl;
@@ -762,13 +763,24 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 //                cout << "after step2.1" << endl;
             }
+            if (tmp_aln->getPosition() > 200000)
+                int kdjf = 0;
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
+                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
                 }
 //                cout << "step3" << endl;
             } else if (i != bp_realn.end()){
+                if ((tmp_aln->getPosition() + tmp_aln->getRefLength() < i->chr_pos.first - distance
+                && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() < i->chr_idx.first) // read is behind bp
                     mapped_file->Jump(i->chr_idx.first, max((long)0, i->chr_pos.first - distance));
+                else if ((tmp_aln->getPosition() > i->chr_pos.first + distance
+                && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() > i->chr_idx.first) { // read is ahead of bp
+                    while (!(tmp_aln->getPosition() <= i->chr_pos.first + distance
+                            && tmp_aln->getRefID() == i->chr_idx.first))
+                        i++;
+                }
             }
 
             num_reads++;
