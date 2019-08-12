@@ -574,115 +574,113 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	 }*/
 	std::cout << "Start parsing... " << ref[tmp_aln->getRefID()].RefName << std::endl;
 
-	while (!tmp_aln->getQueryBases().empty()) {
+//filter and copy results:
+    while (!tmp_aln->getQueryBases().empty()) {
 
-		if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {	// && (Parameter::Instance()->chr_names.empty() || Parameter::Instance()->chr_names.find(ref[tmp_aln->getRefID()].RefName) != Parameter::Instance()->chr_names.end())) {
-            if (tmp_aln->getPosition() > 190000)
-                int kdjf = 0;
-			//change CHR:
-			if (current_RefID != tmp_aln->getRefID()) {
+        if ((tmp_aln->getAlignment()->IsPrimaryAlignment()) && (!(tmp_aln->getAlignment()->AlignmentFlag & 0x800) && tmp_aln->get_is_save())) {	// && (Parameter::Instance()->chr_names.empty() || Parameter::Instance()->chr_names.find(ref[tmp_aln->getRefID()].RefName) != Parameter::Instance()->chr_names.end())) {
+            //change CHR:
+            if (current_RefID != tmp_aln->getRefID()) {
 
-				std::cout << "\tSwitch Chr " << ref[tmp_aln->getRefID()].RefName << std::endl;	//" " << ref[tmp_aln->getRefID()].RefLength
-				std::vector<Breakpoint *> points;
-				bst.get_breakpoints(root, points);
-				//polish_points(points, ref);
+                std::cout << "\tSwitch Chr " << ref[tmp_aln->getRefID()].RefName << std::endl;	//" " << ref[tmp_aln->getRefID()].RefLength
+                std::vector<Breakpoint *> points;
+                bst.get_breakpoints(root, points);
+                //polish_points(points, ref);
 
-				/*	if (Parameter::Instance()->genotype) {
-				 fclose(ref_allel_reads);
-				 cout<<"\t\tGenotyping"<<endl;
-				 go->update_SVs(points, ref_space);
-				 cout<<"\t\tGenotyping finished"<<endl;
-				 ref_allel_reads = fopen(Parameter::Instance()->tmp_genotyp.c_str(), "wb");
-				 }*/
+                /*	if (Parameter::Instance()->genotype) {
+                 fclose(ref_allel_reads);
+                 cout<<"\t\tGenotyping"<<endl;
+                 go->update_SVs(points, ref_space);
+                 cout<<"\t\tGenotyping finished"<<endl;
+                 ref_allel_reads = fopen(Parameter::Instance()->tmp_genotyp.c_str(), "wb");
+                 }*/
 
-				for (int i = 0; i < points.size(); i++) {
-					points[i]->calc_support();
-					if (points[i]->get_valid()) {
-						//invoke update over ref support!
-						if (points[i]->get_SVtype() & TRA) {
-							final.insert(points[i], root_final);
-						} else {
-							printer->printSV(points[i]);
-						}
-					}
-				}
-				bst.clear(root);
-				current_RefID = tmp_aln->getRefID();
-				ref_space = get_ref_lengths(tmp_aln->getRefID(), ref);
+                for (int i = 0; i < points.size(); i++) {
+                    points[i]->calc_support();
+                    if (points[i]->get_valid()) {
+                        //invoke update over ref support!
+                        if (points[i]->get_SVtype() & TRA) {
+                            final.insert(points[i], root_final);
+                        } else {
+                            printer->printSV(points[i]);
+                        }
+                    }
+                }
+                bst.clear(root);
+                current_RefID = tmp_aln->getRefID();
+                ref_space = get_ref_lengths(tmp_aln->getRefID(), ref);
 //				overlapAlignments.clear();
-			}
+            }
 
-			//SCAN read:
-			std::vector<str_event> aln_event;
-			std::vector<aln_str> split_events;
-			if (tmp_aln->getMappingQual() > Parameter::Instance()->min_mq) {
-				double score = tmp_aln->get_scrore_ratio();
+            //SCAN read:
+            std::vector<str_event> aln_event;
+            std::vector<aln_str> split_events;
+            if (tmp_aln->getMappingQual() > Parameter::Instance()->min_mq) {
+                double score = tmp_aln->get_scrore_ratio();
 
-				//
+                //
 
 #pragma omp parallel // starts a new team
-				{
+                {
 #pragma omp sections
-					{
+                    {
 #pragma omp section
-						{
-							//		clock_t begin = clock();
-							if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
-								aln_event = tmp_aln->get_events_Aln();
-							}
-							//		Parameter::Instance()->meassure_time(begin, " Alignment ");
-						}
+                        {
+                            //		clock_t begin = clock();
+                            if ((score == -1 || score > Parameter::Instance()->score_treshold)) {
+                                aln_event = tmp_aln->get_events_Aln();
+                            }
+                            //		Parameter::Instance()->meassure_time(begin, " Alignment ");
+                        }
 #pragma omp section
-						{
-							//	clock_t begin_split = clock();
-							split_events = tmp_aln->getSA(ref);
-							//	Parameter::Instance()->meassure_time(begin_split, " Split reads ");
-						}
-					}
-				}
-				//tmp_aln->set_supports_SV(aln_event.empty() && split_events.empty());
+                        {
+                            //	clock_t begin_split = clock();
+                            split_events = tmp_aln->getSA(ref);
+                            //	Parameter::Instance()->meassure_time(begin_split, " Split reads ");
+                        }
+                    }
+                }
+                //tmp_aln->set_supports_SV(aln_event.empty() && split_events.empty());
 
-				//Store reference supporting reads for genotype estimation:
+                //Store reference supporting reads for genotype estimation:
 
-				bool SV_support = (!aln_event.empty() && !split_events.empty());
-				if (Parameter::Instance()->genotype && !SV_support) {
-				//	cout << "STORE" << endl;
-					//write read:
-					/*str_read tmp;
-					tmp.chr_id = tmp_aln->getRefID();	//check string in binary???
-					tmp.start = tmp_aln->getPosition();
-					tmp.length = tmp_aln->getRefLength();
-					if (tmp_aln->getStrand()) {
-						tmp.strand = 1;
-					} else {
-						tmp.strand = 2;
-					}*/
-					write_read(tmp_aln, ref_allel_reads);
-					//fwrite(&tmp, sizeof(struct str_read), 1, ref_allel_reads);
-				}
+                bool SV_support = (!aln_event.empty() && !split_events.empty());
+                if (Parameter::Instance()->genotype && !SV_support) {
+                    //	cout << "STORE" << endl;
+                    //write read:
+                    /*str_read tmp;
+                    tmp.chr_id = tmp_aln->getRefID();	//check string in binary???
+                    tmp.start = tmp_aln->getPosition();
+                    tmp.length = tmp_aln->getRefLength();
+                    if (tmp_aln->getStrand()) {
+                        tmp.strand = 1;
+                    } else {
+                        tmp.strand = 2;
+                    }*/
+                    write_read(tmp_aln, ref_allel_reads);
+                    //fwrite(&tmp, sizeof(struct str_read), 1, ref_allel_reads);
+                }
 
-				//store the potential SVs:
-				if (!aln_event.empty()) {
-					add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
-				}
-				if (!split_events.empty()) {
-					add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
-					//realign the reads in overlapAlignments
+                //store the potential SVs:
+                if (!aln_event.empty()) {
+                    add_events(tmp_aln, aln_event, 0, ref_space, bst, root, num_reads, false);
+                }
+                if (!split_events.empty()) {
+                    add_splits(tmp_aln, split_events, 1, ref, bst, root, num_reads, false);
+                    //realign the reads in overlapAlignments
 
-				}
-			}
-		}
+                }
+            }
+        }
 
-		mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
+        mapped_file->parseReadFast(Parameter::Instance()->min_mq, tmp_aln);
 
-		num_reads++;
+        num_reads++;
 
-		if (num_reads % 10000 == 0) {
-			cout << "\t\t# Processed reads: " << num_reads << endl;
-		}
-	}
-//filter and copy results:
-	std::cout << "Finalizing  .." << std::endl;
+        if (num_reads % 10000 == 0) {
+            cout << "\t\t# Processed reads: " << num_reads << endl;
+        }
+    }
+    std::cout << "Finalizing  .." << std::endl;
 	std::vector<Breakpoint *> points;
 	bst.get_breakpoints(root, points);
 
@@ -763,8 +761,6 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 //                cout << "after step2.1" << endl;
             }
-            if (tmp_aln->getPosition() > 200000)
-                int kdjf = 0;
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
@@ -776,7 +772,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() < i->chr_idx.first) // read is behind bp
                     mapped_file->Jump(i->chr_idx.first, max((long)0, i->chr_pos.first - distance));
                 else if ((tmp_aln->getPosition() > i->chr_pos.first + distance
-                && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() > i->chr_idx.first) { // read is ahead of bp
+                && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() > i->chr_idx.first) { // read is a  bp
                     while (!(tmp_aln->getPosition() <= i->chr_pos.first + distance
                             && tmp_aln->getRefID() == i->chr_idx.first))
                         i++;
