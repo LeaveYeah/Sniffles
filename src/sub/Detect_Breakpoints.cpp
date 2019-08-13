@@ -764,7 +764,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
-//                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
+                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
                 }
 //                cout << "step3" << endl;
             } else if (i != bp_realn.end()){
