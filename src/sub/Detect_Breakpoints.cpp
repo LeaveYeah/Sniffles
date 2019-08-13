@@ -772,7 +772,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() < i->chr_idx.first) // read is behind bp
                     mapped_file->Jump(i->chr_idx.first, max((long)0, i->chr_pos.first - distance));
                 else if ((tmp_aln->getPosition() > i->chr_pos.first + distance
-                && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() > i->chr_idx.first) { // read is a  bp
+                && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() > i->chr_idx.first) { // read is ahead of  bp
                     while (!(tmp_aln->getPosition() <= i->chr_pos.first + distance
                             && tmp_aln->getRefID() == i->chr_idx.first)) {
                         i++;
