@@ -3,18 +3,15 @@ project(Sniffles)
 
 find_package (ZLIB)
 find_package (SeqAn REQUIRED)
-find_package (htslib REQUIRED)
 
 
 configure_file( Version.h.in ${CMAKE_SOURCE_DIR}/src/Version.h )
 
 set(SEQAN_INCLUDE_DIRS "/data2/junwenwang/m204333/Project/seqan-v2.2.0/include")
-set(HTSlib_INCLUDE_DIRS "/data2/junwenwang/m204333/Project/htslib/include")
 
 include_directories (../lib/bamtools-2.3.0/src)
 include_directories(../lib/tclap-1.2.1/include)
 include_directories (${SEQAN_INCLUDE_DIRS})
-include_directories(${HTSlib_INCLUDE_DIRS})
 
 add_definitions (${SEQAN_DEFINITIONS})
 
@@ -59,8 +56,7 @@ add_executable(sniffles
 TARGET_LINK_LIBRARIES(sniffles BamTools-static)
 TARGET_LINK_LIBRARIES(sniffles zlibstatic)
 TARGET_LINK_LIBRARIES (sniffles ${SEQAN_LIBRARIES})
-target_link_libraries(sniffles ${HTSlib_LIBRARIES})
-	
+
 add_executable(sniffles-debug 	
                     tree/Breakpoint_Tree.cpp
                     Genotyper/Genotyper.cpp
@@ -94,7 +90,5 @@ SET_TARGET_PROPERTIES(sniffles-debug PROPERTIES COMPILE_FLAGS "-g3 -O0")
 TARGET_LINK_LIBRARIES(sniffles-debug BamTools-static)
 TARGET_LINK_LIBRARIES (sniffles-debug ${SEQAN_LIBRARIES})
 TARGET_LINK_LIBRARIES(sniffles-debug zlibstatic)
-target_link_libraries(sniffles-debug ${HTSlib_LIBRARIES})
-
 
 
