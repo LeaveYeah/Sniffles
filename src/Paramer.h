@@ -80,6 +80,7 @@ public:
 //	bool splitthreader_output;
 	bool debug;
 	bool genotype;
+	bool realn_clipped;
 	bool phase;
 	bool ignore_std;
 	bool reportBND;
