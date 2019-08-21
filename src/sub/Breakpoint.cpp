@@ -196,6 +196,7 @@ void Breakpoint::add_read(Breakpoint * point) { //point = one read support!
 		    else this->positions.support[(*i).first + "_ext"] = (*i).second;
 		}
 	}
+
 }
 
 void Breakpoint::add_read(read_str read, string read_name) {

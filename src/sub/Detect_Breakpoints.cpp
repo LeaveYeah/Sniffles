@@ -511,6 +511,9 @@ void realign_read(BreakPointRealign bp_realign, vector<differences_str> &event_a
     int diff;
     if (bp_realign.chr_pos.first - distance <= tmp_aln->getPosition() ||
         bp_realign.chr_pos.first + distance >= tmp_aln->getPosition() + tmp_aln->getRefLength()) {
+//        if pacbio,
+//        return;
+
         auto map = bp_realign.bp->get_coordinates().support;
         if (map.find(tmp_aln->getName()) != map.end()) return;
         bool existsGap = detect_gap(tmp_aln, bp_realign.chr_pos.first, distance, diff, ref);
