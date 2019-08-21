@@ -763,11 +763,23 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 //                cout << "after step2.1" << endl;
             }
+            int read_pos_first = -1, read_pos_second = -1;
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
-                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
+                    if (j->chr_pos.first == 5349207 )
+                        read_pos_first = tmp_aln->bp_read_pos;
+                    else if (j->chr_pos.first == 5349337)
+                        read_pos_second = tmp_aln->bp_read_pos;
+
+//                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
                 }
+                if (read_pos_first != -1 && read_pos_second != -1) {
+                    cout << ">" << tmp_aln->getName() << endl;
+                    cout << tmp_aln->getQueryBases().substr(read_pos_first, read_pos_second - read_pos_first) << endl;
+                    cout << read_pos_second << " " << read_pos_first << endl;
+                }
+
 //                cout << "step3" << endl;
             } else if (i != bp_realn.end()){
                 if ((tmp_aln->getPosition() + tmp_aln->getRefLength() < i->chr_pos.first - distance
