@@ -92,13 +92,16 @@ private:
 
 
 public:
+
     long bp_read_pos;
+    int diff;
     int high_error_region_score;
     bool high_error_side;
 	Alignment(){
 		al=NULL;
 		ref_len=0;
 	    stop=0;
+	    diff =0;
 		orig_length=0;
 		al=NULL;
 		is_computed=false;
