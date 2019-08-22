@@ -112,7 +112,7 @@ void detect_merged_svs(position_str point, RefVector ref, vector<Breakpoint *> &
 }
 
 void fix_mismatch_read_pos(vector<differences_str> &event_aln, int i, Alignment * tmp_aln){
-    int read_pos;
+    int read_pos = 0;
     if (i == 0) {
         if (tmp_aln->getAlignment()->CigarData[0].Type == 'S')
             read_pos += tmp_aln->getAlignment()->CigarData[0].Length;
@@ -211,7 +211,7 @@ bool cal_high_error_side(vector<differences_str> &event_aln, long pos, long dist
     if (abs(evt_left.position - pos) < abs(evt_right.position - pos)) {
         tmp_aln->bp_read_pos = evt_left.readposition;
         diff = evt_left.position - pos;
-    } else if (abs(evt_left.position - pos) < abs(evt_right.position - pos)) {
+    } else if (abs(evt_right.position - pos) < abs(evt_left.position - pos)) {
         tmp_aln->bp_read_pos = evt_right.readposition;
         diff = evt_right.position - pos;
     }
@@ -249,8 +249,6 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
     typedef StringSet<TSequence, Dependent<>> TDepStringSet;
     typedef seqan::Alignment<TDepStringSet> TAlignStringSet; // dependent string set
     typedef Graph<TAlignStringSet> TAlignGraph;       // alignment graph// sequence type
-//    typedef seqanAlign<TSequence, ArrayGaps> TAlign;
-
 
 
     if (bp.isSameStrand) bp.chr_pos.second += diff;
@@ -278,18 +276,7 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
     TAlignGraph alignG(sequences);
 
     int score = globalAlignment(alignG, Score<int, Simple>(0, -1, -1), AlignConfig<false, false, true, true>(), LinearGaps());
-//
-//
-//
-    TAlign align;
-    resize(rows(align), 2);
-    assignSource(row(align, 0), reference);
-    assignSource(row(align, 1), sequence);
-//    int score = globalAlignment(align,  MyersBitVector());
-//    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-//    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-//
-//    std::cout << "Time for one alignment :" << duration << endl;
+
     return score;
 
 }
@@ -732,6 +719,10 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
+    ofstream fastq_out;
+    fastq_out.open ("/data2/junwenwang/m204333/Project/sniffles/out/analysis/example.fq");
+
+
     num_reads = 0;
     while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
         if (tmp_aln->get_is_save()) {
@@ -768,16 +759,20 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
                     if (j->chr_pos.first == 5349207 )
-                        read_pos_first = tmp_aln->bp_read_pos;
+                        if (tmp_aln->high_error_side)
+                            read_pos_first = tmp_aln->bp_read_pos;
+                        else read_pos_first = tmp_aln->bp_read_pos + distance;
                     else if (j->chr_pos.first == 5349337)
-                        read_pos_second = tmp_aln->bp_read_pos;
+                        if (tmp_aln->high_error_side)
+                            read_pos_second = tmp_aln->bp_read_pos;
+                        else read_pos_second = tmp_aln->bp_read_pos + distance;
 
 //                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
                 }
-                if (read_pos_first != -1 && read_pos_second != -1) {
-                    cout << ">" << tmp_aln->getName() << endl;
-                    cout << tmp_aln->getQueryBases().substr(read_pos_first, read_pos_second - read_pos_first) << endl;
-                    cout << read_pos_second << " " << read_pos_first << endl;
+                if (read_pos_first != -1 && read_pos_second != -1 && read_pos_first != read_pos_second) {
+                    fastq_out << ">" << tmp_aln->getName() << endl;
+                    fastq_out << tmp_aln->getQueryBases().substr(read_pos_first, read_pos_second - read_pos_first) << endl;
+//                    cout << read_pos_second << " " << read_pos_first << endl;
                 }
 
 //                cout << "step3" << endl;
@@ -804,6 +799,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
         tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
 
     }
+    fastq_out.close();
+
 
 
     for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
