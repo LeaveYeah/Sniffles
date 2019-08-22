@@ -70,113 +70,81 @@ Scratch:
 //through reads
 
 
-void add_realign_read(BreakPointRealign bp_realign){
-    read_str tmp;
-    if (bp_realign.coordinate.first < bp_realign.coordinate.second) {
-        tmp.coordinates.first = bp_realign.coordinate.first + diff;
-        if (bp_realign.isSameStrand)
-            tmp.coordinates.second = bp_realign.coordinate.second + diff;
-        else tmp.coordinates.second = bp_realign.coordinate.second - diff;
-    } else {
-        tmp.coordinates.second = bp_realign.coordinate.first + diff;
-        if (bp_realign.isSameStrand)
-            tmp.coordinates.first = bp_realign.coordinate.second + diff;
-        else tmp.coordinates.first = bp_realign.coordinate.second - diff;
+```
+void map_read_example(string ref_str, String seq_str){
+    using namespace seqan;
+    typedef String<char> TSequence;
+    typedef StringSet <TSequence> TStringSet;
+    typedef Align <TSequence, ArrayGaps> TAlign;// container for strings
+    typedef StringSet <TSequence, Dependent<>> TDepStringSet;
+    typedef seqan::Alignment <TDepStringSet> TAlignStringSet; // dependent string set
+    typedef Iterator<TRow>::Type TRowIterator;
+
+    TAlign align;
+    TRowIterator it = begin(row1);
+    TRowIterator itEnd = end(row1);
+    for (; it != itEnd; ++it)
+    {
+        if (isGap(it))
+            std::cout << gapValue<char>();
+        else
+            std::cout << *it;
     }
-    tmp.SV = TRA;
-    tmp.type = 1;
+    transform(ref_str.begin(), ref_str.end(), ref_str.begin(), ::toupper);
+    TSequence reference = ref_str;
 
-//                        std::cout << bp_realign.bp->get_coordinates().support.size() << endl;
-    auto map = bp_realign.bp->get_coordinates().support;
-    if (map.find(tmp_aln->getName()) == map.end())
-        bp_realign.bp->add_read(tmp, tmp_aln->getName());
-    else
-        bp_realign.bp->add_read(tmp, tmp_aln->getName() + "_extra");}
-}
-bool detect_gaps(Alignment* tmp_aln, BreakPointRealign bp_realign, int &diff) {
-    std::vector <aln_str> split_events = tmp_aln->getSA(ref);
-    for (auto i: split_events) {
-        if (i->isMain) {
-            if (abs(i->pos - bp_realign.chr_pos.first) < distance) {
-                diff = i->pos - bp_realign.chr_pos.first;
-                tmp_aln->high_error_side = false;
-                if (i->strand) tmp_aln->bp_read_pos = i->read_pos_start;
-                else tmp_aln->bp_read_pos = i->read_pos_stop;
-                return true;
-            } else if (abs(i->pos + i->length - bp_realign.chr_pos.first) < distance) {
-                diff = i->pos + i->length - bp_realign.chr_pos.first;
-                tmp_aln->high_error_side = true;
-                if (i->strand) tmp_aln->bp_read_pos = i->read_pos_stop;
-                else tmp_aln->bp_read_pos = i->read_pos_start;
-                return true;
-            }
-        }
-    }
-    return false;
+    transform(seq_str.begin(), seq_str.end(), seq_str.begin(), ::toupper);
+    TSequence sequence = seq_str;
+
+    resize(rows(align), 2);
+    assignSource(row(align, 0), reference);
+    assignSource(row(align, 1), sequence);
+
+    TRow & row1 = row(align, 0);
+    TRow & row2 = row(align, 1);
+
 }
 
+int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int diff, int distance,
+             const bioio::FastaIndex  index, std::ifstream & fasta) {
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+    using namespace seqan;
+    typedef String<char> TSequence;
+    typedef StringSet <TSequence> TStringSet;
+    typedef Align <TSequence, ArrayGaps> TAlign;// container for strings
+    typedef StringSet <TSequence, Dependent<>> TDepStringSet;
+    typedef seqan::Alignment <TDepStringSet> TAlignStringSet; // dependent string set
+    typedef Graph <TAlignStringSet> TAlignGraph;       // alignment graph// sequence type
 
-void realign_read(BreakPointRealign bp_realign, vector<aln_str> &event_aln, Alignment* tmp_aln,
-        const bioio::FastaIndex  index, std::ifstream & fasta) {
-    int distance = min(100, Parameter::Instance()->min_length);
-    int diff;
-    if (bp_realign.chr_pos.first - distance <= tmp_aln->getPosition() ||
-        bp_realign.chr_pos.first + distance >= tmp_aln->getPosition() + tmp_aln->getRefLength()) {
-        auto map = bp_realign.bp->get_coordinates().support;
-        if (map.find(tmp_aln->getName()) != map.end()) return;
 
-    } else {
+    if (bp.isSameStrand) bp.chr_pos.second += diff;
+    else bp.chr_pos.second -= diff;
 
-        bool exists_high_error_side = cal_high_error_side(event_aln, bp_realign.chr_pos.first, distance, diff, tmp_aln);
-        if (!exists_high_error_side) return;
-        int alt_aln_score = map_read(tmp_aln, bp_realign, diff, distance, index, fasta);
-        if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
-            alt_aln_score > -0.2 * distance) {
-            add_realign_read(bp_realign);
-        }
-    }
+    if (!tmp_aln->high_error_side) tmp_aln->bp_read_pos -= distance; //lefthand side
+    if (bp.isSameStrand != tmp_aln->high_error_side) bp.chr_pos.second -= distance;
+
+    string ref_str = bioio::read_fasta_contig(fasta, index.at(bp.chr.second), bp.chr_pos.second, distance);
+    transform(ref_str.begin(), ref_str.end(), ref_str.begin(), ::toupper);
+    TSequence reference = ref_str;
+    if (tmp_aln->bp_read_pos + distance > tmp_aln->getQueryBases().size())
+        return -50;
+    if (tmp_aln->bp_read_pos < 0)
+        return -50;
+//    std::cout << bp.chr.second << " " << bp.chr_pos.second << endl;
+//    std::cout << tmp_aln->bp_read_pos << " " << distance << endl;
+    string seq_str = tmp_aln->getQueryBases().substr(tmp_aln->bp_read_pos, distance);
+    transform(seq_str.begin(), seq_str.end(), seq_str.begin(), ::toupper);
+    TSequence sequence = seq_str;
+
+    resize(rows(align), 2);
+    assignSource(row(align, 0), seq1);
+    assignSource(row(align, 1), seq2);
+
+    TAlignGraph alignG(sequences);
+
+    int score = globalAlignment(alignG, Score<int, Simple>(0, -1, -1), AlignConfig<false, false, true, true>(),
+                                LinearGaps());
+
+    return score;
 }
-
-
-//
-int diff;
-bool exists_high_error_side = cal_high_error_side(event_aln, j->chr_pos.first, distance, diff,
-                                                  tmp_aln);
-//                    cout << "step2.2" << endl;
-if (!exists_high_error_side) continue;
-int alt_aln_score = map_read(tmp_aln, *j, diff, distance, index, fasta);
-if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
-alt_aln_score > -0.2 * distance) {
-read_str tmp;
-if (j->coordinate.first < j->coordinate.second) {
-tmp.coordinates.first = j->coordinate.first + diff;
-if (j->isSameStrand)
-tmp.coordinates.second = j->coordinate.second + diff;
-else tmp.coordinates.second = j->coordinate.second - diff;
-} else {
-tmp.coordinates.second = j->coordinate.first + diff;
-if (j->isSameStrand)
-tmp.coordinates.first = j->coordinate.second + diff;
-else tmp.coordinates.first = j->coordinate.second - diff;
-}
-tmp.SV = TRA;
-tmp.type = 1;
-
-//                        std::cout << j->bp->get_coordinates().support.size() << endl;
-auto map = j->bp->get_coordinates().support;
-if (map.find(tmp_aln->getName()) ==
-map.end())
-j->bp->add_read(tmp, tmp_aln->getName());
-else
-j->bp->add_read(tmp, tmp_aln->getName()+"_extra");
-
-//                        std::cout << j->bp->get_coordinates().start.max_pos << " " << j->bp->get_coordinates().stop.max_pos << endl;
-//                        std::cout << j->bp->get_coordinates().support.size() << endl;
-//                        for (auto i: j->bp->get_coordinates().support){
-//                            std::cout << i.first << " " << i.second.coordinates.first << " "
-//                             << i.second.coordinates.second << endl;
-//                        }
-}
-
-if (j->chr_idx.first != tmp_aln->getRefID() || j->chr_pos.first - distance < tmp_aln->getPosition() ||
-j->chr_pos.first + distance < tmp_aln->getPosition()) {
+```
