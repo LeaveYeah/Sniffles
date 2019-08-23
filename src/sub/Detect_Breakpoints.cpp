@@ -8,9 +8,20 @@
 #include "Detect_Breakpoints.h"
 #include "../print/IPrinter.h"
 #include "seqan/align.h"
+#include "seqan/bam_io.h"
 #include "../Alignment.h"
 #include "../bioio.hpp"
 #include <chrono>
+
+struct map_example {
+    bool strand;
+    string chr;
+    pair<int, int> diff;
+    pair<long, long>ref_pos;
+    pair<long, long> read_pos;
+    Alignment * tmp_aln;
+    string bases;
+};
 
 void store_pos(vector<hist_str> &positions, long pos, std::string read_name) {
 	for (size_t i = 0; i < positions.size(); i++) {
@@ -281,7 +292,7 @@ int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int distance,
 
 }
 
-void map_read_example(string ref_str, string seq_str){
+vector<CigarOp> map_read_example(string ref_str, string seq_str){
     using namespace seqan;
     typedef String<char> TSequence;
     typedef StringSet <TSequence> TStringSet;
@@ -300,6 +311,7 @@ void map_read_example(string ref_str, string seq_str){
     transform(seq_str.begin(), seq_str.end(), seq_str.begin(), ::toupper);
     TSequence sequence = seq_str;
 
+
     resize(rows(align), 2);
     assignSource(row(align, 0), reference);
     assignSource(row(align, 1), sequence);
@@ -310,9 +322,12 @@ void map_read_example(string ref_str, string seq_str){
     int score = globalAlignment(align, Score<int, Simple>(0, -2, -1, -2));
     cout << score << endl;
     cout << align << endl;
-
     TRowIterator itRef = begin(row1);
     TRowIterator itSeq = begin(row2);
+    vector<CigarOp> cigar;
+    if (seq_str.size() == 0)
+        return cigar;
+
     int numMatchAndMismatches = 0;
     while (itSeq != end(row2))
     {
@@ -320,7 +335,8 @@ void map_read_example(string ref_str, string seq_str){
         if (isGap(itRef))
         {
             int numGaps = countGaps(itRef);
-            cout << numGaps << "I";
+            CigarOp cigarOp('I', numGaps );
+            cigar.push_back(cigarOp);
             itRef += numGaps;
             itSeq += numGaps;
             continue;
@@ -329,7 +345,8 @@ void map_read_example(string ref_str, string seq_str){
         if (isGap(itSeq))
         {
             int numGaps = countGaps(itSeq);
-            cout << numGaps << "D";
+            CigarOp cigarOp('D', numGaps );
+            cigar.push_back(cigarOp);
             itRef += numGaps;
             itSeq += numGaps;
             continue;
@@ -345,10 +362,16 @@ void map_read_example(string ref_str, string seq_str){
             ++itRef;
             ++itSeq;
         }
-        if (numMatchAndMismatches != 0)
-            cout << numMatchAndMismatches << "M";
+        if (numMatchAndMismatches != 0) {
+            CigarOp cigarOp('M', numMatchAndMismatches );
+            cigar.push_back(cigarOp);
+        }
         numMatchAndMismatches = 0;
     }
+
+    cout << endl;
+    return cigar;
+
 }
 
 //vector<differences_str> get_aln_events(Alignment * tmp_aln){
@@ -541,7 +564,7 @@ bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
                 && abs(split_events[i].read_pos_stop - split_events[i+1].read_pos_start) >= distance) {
                     tmp_aln->bp_read_pos = tmp_aln->getAlignment()->Length - 1 - split_events[i].read_pos_stop;
                     return true;
-                } else false;
+                } else return false;
             } else if (abs(split_events[i].pos + split_events[i].length - ref_pos) < distance) {
                 tmp_aln->diff = split_events[i].pos + split_events[i].length - ref_pos;
                 tmp_aln->high_error_side = true;
@@ -767,7 +790,6 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	final.get_breakpoints(root_final, points);
 	//std::cout<<"Detect merged tra"<<std::endl;
 	size_t points_size = points.size();
-	cout << "points size:" << points_size << endl;
 
 
     vector<BreakPointRealign> bp_realn;
@@ -788,11 +810,12 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 
     const auto index = bioio::read_fasta_index(Parameter::Instance()->fasta_index_file);
     std::ifstream fasta {Parameter::Instance()->fasta_file, std::ios::binary};
-    ofstream fastq_out;
-    fastq_out.open ("/data2/junwenwang/m204333/Project/sniffles/out/analysis/example.fq");
+    ofstream bam_out;
+    bam_out.open ("/data2/junwenwang/m204333/Project/sniffles/out/analysis/example.sam");
 
 
     num_reads = 0;
+    map<string, map_example> example_map;
     while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
         if (tmp_aln->get_is_save()) {
 //            std::cout << ref[tmp_aln->getRefID()].RefName << " " << tmp_aln->getPosition() << endl;
@@ -823,37 +846,49 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 //                cout << "after step2.1" << endl;
             }
-            int read_pos_first = -1, read_pos_second = -1, ref_pos_first, ref_pos_second, diff_first, diff_second;
+            string chr;
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
+                    if (tmp_aln->getName() == "28cb0a96-7d75-4073-87c1-857ea0e72939") {
+                        tmp_aln->bp_read_pos == -1;
+                        tmp_aln->bp_read_pos += 0;
+                    }
+
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
-//                    if (j->chr_pos.first == 5349207 ) {
-//                        if (tmp_aln->high_error_side)
-//                            read_pos_first = tmp_aln->bp_read_pos;
-//                        else read_pos_first = tmp_aln->bp_read_pos + distance;
-//                        ref_pos_first = j->chr_pos.second;
-//                        diff_first = tmp_aln->diff;
-//                    }
-//                    else if (j->chr_pos.first == 5349337) {
-//                        if (tmp_aln->high_error_side)
-//                            read_pos_second = tmp_aln->bp_read_pos;
-//                        else read_pos_second = tmp_aln->bp_read_pos + distance;
-//                        ref_pos_second = j->chr_pos.second;
-//                        diff_second = tmp_aln->diff;
-//                    }
-////                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
-//                }
-//                if (read_pos_first != -1 && read_pos_second != -1 && read_pos_first != read_pos_second) {
-//                    cout << ">" << tmp_aln->getName() << endl;
-//                    cout << tmp_aln->getQueryBases().substr(read_pos_first, read_pos_second - read_pos_first) << endl;
-//                    string ref_str = bioio::read_fasta_contig(fasta, index.at("chr19"), ref_pos_first + diff_first, ref_pos_second - ref_pos_first + diff_second);
-//                    string seq_str = tmp_aln->getQueryBases().substr(read_pos_first, read_pos_second - read_pos_first);
-//                    map_read_example(ref_str, seq_str);
-//
-//
-//                    cout << endl;
-////                    cout << read_pos_second << " " << read_pos_first << endl;
+                    if (j->chr_pos.first == 4007175 || j->chr_pos.first == 163087117 || j->chr_pos.first == 4008128 || j->chr_pos.first == 163088072)  {
+                        if (example_map.find(tmp_aln->getName()) == example_map.end()) {
+
+                            map_example example;
+                            example.strand = tmp_aln->getStrand();
+
+                            if (tmp_aln->getAlignment()->IsPrimaryAlignment() && !(tmp_aln->getAlignment()->AlignmentFlag & 0x800) )
+                                example.bases = tmp_aln->getQueryBases();
+                            example.tmp_aln = tmp_aln;
+                            if (tmp_aln->high_error_side)
+                                example.read_pos.first = tmp_aln->bp_read_pos;
+                            else example.read_pos.first = tmp_aln->bp_read_pos + distance;
+                            example.ref_pos.first = j->chr_pos.second;
+
+                            example.diff.first = tmp_aln->diff;
+                            example_map[tmp_aln->getName()] = example;
+                        }  else {
+                            example_map[tmp_aln->getName()].chr = "";
+                            if (tmp_aln->getAlignment()->IsPrimaryAlignment() && !(tmp_aln->getAlignment()->AlignmentFlag & 0x800))
+                                example_map[tmp_aln->getName()].bases = tmp_aln->getQueryBases();
+
+                            if (tmp_aln->high_error_side)
+                                example_map[tmp_aln->getName()].read_pos.second = tmp_aln->bp_read_pos;
+                            else example_map[tmp_aln->getName()].read_pos.second = tmp_aln->bp_read_pos + distance;
+                            example_map[tmp_aln->getName()].ref_pos.second = j->chr_pos.second;
+                            example_map[tmp_aln->getName()].diff.second = tmp_aln->diff;
+                            example_map[tmp_aln->getName()].chr = j->chr.second;
+                        }
+
+                    }
+
+//                    std::cout << "Realn: " << j->chr.first << " " << j->chr_pos.first << " " << tmp_aln->getName() << endl;
                 }
+
 
 //                cout << "step3" << endl;
             } else if (i != bp_realn.end()){
@@ -879,7 +914,64 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
         tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
 
     }
-    fastq_out.close();
+    for (auto example_map_tuple: example_map) {
+        string name = example_map_tuple.first;
+        if (name == "14a7a43d-d5d7-4bdf-98f5-09138c52e0d5")
+            continue;
+        map_example example = example_map_tuple.second;
+        if (example.chr != "") {
+            int read_pos_first = example.read_pos.first, read_pos_second = example.read_pos.second,
+            ref_pos_first = example.ref_pos.first, ref_pos_second = example.ref_pos.second,
+            diff_first = example.diff.first, diff_second = example.diff.second;
+            cout << ">" << name << endl;
+            cout << example.bases.substr(read_pos_first, read_pos_second - read_pos_first) << endl;
+            string ref_str = bioio::read_fasta_contig(fasta, index.at(example.chr), ref_pos_first + diff_first,
+                                                      ref_pos_second - ref_pos_first + diff_second);
+            string seq_str = example.bases.substr(read_pos_first, read_pos_second - read_pos_first);
+            vector<CigarOp> cigar = map_read_example(ref_str, seq_str);
+            if (cigar.empty())
+                continue;
+
+            if (cigar[0].Type == 'D') {
+                ref_pos_first = ref_pos_first + cigar[0].Length;
+                cigar.erase(cigar.begin());
+            } else if (cigar[0].Type == 'I') {
+                read_pos_first = read_pos_first + cigar[0].Length;
+                cigar.erase(cigar.begin());
+            }
+
+            if (cigar[cigar.size() - 1].Type == 'D') {
+                ref_pos_second = ref_pos_second - cigar[cigar.size() - 1].Length;
+                cigar.erase(cigar.begin() + cigar.size() - 1);
+            } else if (cigar[cigar.size() - 1].Type == 'I') {
+                read_pos_second = read_pos_second - cigar[cigar.size() - 1].Length;
+                cigar.erase(cigar.begin() + cigar.size() - 1);
+            }
+            int flag = 0;
+            if (!example.strand) flag = 16;
+
+            bam_out << name << "\t" << flag << "\t" << example.chr << "\t" << ref_pos_first + diff_first + 1
+                    << "\t" << 60 << "\t";
+            cout << endl;
+            int cigar_len = 0;
+            for (auto cigar_str: cigar) {
+                bam_out << cigar_str.Length << cigar_str.Type;
+                cout << cigar_str.Length << cigar_str.Type;
+                if (cigar_str.Type != 'D')
+                    cigar_len += cigar_str.Length;
+            }
+
+            bam_out << "\t*\t" << 0 << "\t" << 0 << "\t"
+                    << example.bases.substr(read_pos_first, read_pos_second - read_pos_first)
+                    << "\t" << "*" << endl;
+            cout << "\t" << cigar_len << " " << read_pos_second - read_pos_first << endl;
+
+            cout << endl;
+        }
+    }
+
+
+    bam_out.close();
 
 
 
