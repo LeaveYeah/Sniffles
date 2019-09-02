@@ -250,7 +250,7 @@ bool cal_high_error_side(vector<differences_str> &event_aln, long pos, long dist
     return false;
 }
 
-int map_read(Alignment  * tmp_aln, BreakPointRealign bp, int distance,
+int map_read(Alignment  * tmp_aln, BpRln bp, int distance,
         const bioio::FastaIndex  index, std::ifstream & fasta){
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     using namespace seqan;
@@ -435,11 +435,12 @@ long get_ref_lengths(int id, RefVector ref) {
 	return length;
 }
 
-void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<BreakPointRealign> &bp_realn) {
+void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<BpRln> &bp_rlns) {
     auto point = breakpoint->get_coordinates();
     vector<tra_str> pos_start;
 
     vector<tra_str> pos_stop;
+
 
     for (auto i = point.support.begin(); i != point.support.end(); ++i) {
         store_tra_pos(pos_start, (*i).second, (*i).first, true);
@@ -457,12 +458,12 @@ void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<Br
             coordinate.first = get_max_pos(pos_start[i].map_pos, max_start);
             coordinate.second = get_max_opp_pos(pos_start[i].map_pos[coordinate.first], max_stop);
 
-            BreakPointRealign start_bp(isSameStrand, coordinate, ref, breakpoint);
+            BpRln start_bp(isSameStrand, coordinate, ref, breakpoint);
             std::swap(coordinate.first, coordinate.second);
-            BreakPointRealign stop_bp(isSameStrand, coordinate, ref, breakpoint);
+            BpRln stop_bp(isSameStrand, coordinate, ref, breakpoint);
 
-            bp_realn.push_back(start_bp);
-            bp_realn.push_back(stop_bp);
+            bp_rlns.push_back(start_bp);
+            bp_rlns.push_back(stop_bp);
         }
     }
 }
@@ -495,7 +496,7 @@ void polish_points(std::vector<Breakpoint *> & points, RefVector ref) { //TODO m
 	}
 }
 
-void add_realign_read(BreakPointRealign bp_realign,  Alignment * tmp_aln){
+void add_realign_read(BpRln bp_realign,  Alignment * tmp_aln){
     read_str tmp;
     if (bp_realign.coordinate.first < bp_realign.coordinate.second) {
         tmp.coordinates.first = bp_realign.coordinate.first + tmp_aln->diff;
@@ -523,6 +524,19 @@ void add_realign_read(BreakPointRealign bp_realign,  Alignment * tmp_aln){
 bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
     std::vector <aln_str> split_events = tmp_aln->getSA(ref);
     if (split_events.size() == 0) return false;
+    long read_length;
+    aln_str last_event = split_events[split_events.size()-1];
+    if (tmp_aln->getAlignment()->IsPrimaryAlignment() && !(tmp_aln->getAlignment()->AlignmentFlag & 0x800) )
+        read_length = tmp_aln->getAlignment()->Length;
+    else if (last_event.strand) {
+        read_length = last_event.read_pos_stop;
+        if (last_event.cigar.back().Type == 'S')
+            read_length += last_event.cigar.back().Type;
+    } else {
+        read_length = last_event.read_pos_stop;
+        if (last_event.cigar.front().Type == 'S')
+            read_length += last_event.cigar.front().Type;
+    }
     if (split_events[0].isMain && split_events[0].read_pos_start >= distance) {
         if (split_events[0].strand && abs(split_events[0].pos - ref_pos) < distance) {
             tmp_aln->diff = split_events[0].pos - ref_pos;
@@ -532,11 +546,11 @@ bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
         } else if (!split_events[0].strand && abs(split_events[0].pos + split_events[0].length - ref_pos) < distance) {
             tmp_aln->diff = split_events[0].pos + split_events[0].length - ref_pos;
             tmp_aln->high_error_side = true;
-            tmp_aln->bp_read_pos = tmp_aln->getAlignment()->Length - 1 - split_events[0].read_pos_start;
+            tmp_aln->bp_read_pos = read_length - 1 - split_events[0].read_pos_start;
             return true;
         }
     }
-    aln_str last_event = split_events[split_events.size()-1];
+
     if (last_event.isMain && tmp_aln->getAlignment()->Length - 1 - last_event.read_pos_stop >= distance) {
         if (last_event.strand && abs(last_event.pos + last_event.length - ref_pos) < distance) {
             tmp_aln->diff = last_event.pos + last_event.length - ref_pos;
@@ -546,7 +560,7 @@ bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
         } else if (!last_event.strand && abs(last_event.pos - ref_pos) < distance) {
             tmp_aln->diff = last_event.pos - ref_pos;
             tmp_aln->high_error_side = false;
-            tmp_aln->bp_read_pos = tmp_aln->getAlignment()->Length - 1 - last_event.read_pos_stop;
+            tmp_aln->bp_read_pos = read_length - 1 - last_event.read_pos_stop;
             return true;
         }
     }
@@ -562,7 +576,7 @@ bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
                     return true;
                 } else if (!split_events[i].strand && i < split_events.size() - 1
                 && abs(split_events[i].read_pos_stop - split_events[i+1].read_pos_start) >= distance) {
-                    tmp_aln->bp_read_pos = tmp_aln->getAlignment()->Length - 1 - split_events[i].read_pos_stop;
+                    tmp_aln->bp_read_pos = read_length - 1 - split_events[i].read_pos_stop;
                     return true;
                 } else return false;
             } else if (abs(split_events[i].pos + split_events[i].length - ref_pos) < distance) {
@@ -574,7 +588,7 @@ bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
                     return true;
                 } else if (!split_events[i].strand && i > 0
                 && abs(split_events[i].read_pos_start - split_events[i-1].read_pos_stop) >= distance) {
-                    tmp_aln->bp_read_pos =  tmp_aln->getAlignment()->Length - 1 - split_events[i].read_pos_start;
+                    tmp_aln->bp_read_pos =  read_length - 1 - split_events[i].read_pos_start;
                     return true;
                 }
                 else return false;
@@ -585,7 +599,7 @@ bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
 }
 
 
-void realign_read(BreakPointRealign bp_realign, vector<differences_str> &event_aln, Alignment* tmp_aln,
+void realign_read(BpRln bp_realign, vector<differences_str> &event_aln, Alignment* tmp_aln,
                   const bioio::FastaIndex  index, std::ifstream & fasta, RefVector ref) {
     int distance = min(100, Parameter::Instance()->min_length);
     if (bp_realign.chr_pos.first - distance <= tmp_aln->getPosition() ||
@@ -792,18 +806,18 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 	size_t points_size = points.size();
 
 
-    vector<BreakPointRealign> bp_realn;
+    vector<BpRln> bp_rlns;
     for (size_t i = 0; i < points_size; i++) { // its not nice, but I may alter the length of the vector within the loop.
         if (points[i]->get_SVtype() & TRA) {
-            detect_bp_for_realn(points[i], ref, bp_realn);
+            detect_bp_for_realn(points[i], ref, bp_rlns);
         }
     }
 
     mapped_file->Rewind();
-    std::sort(bp_realn.begin(), bp_realn.end());
-    vector<BreakPointRealign> active_bp;
+    std::sort(bp_rlns.begin(), bp_rlns.end());
+    vector<BpRln> active_bp;
 
-    auto i = bp_realn.begin();
+    auto i = bp_rlns.begin();
     int distance = min(100, Parameter::Instance()->min_length);
     mapped_file->Jump(i->chr_idx.first, max((long)0, i->chr_pos.first - distance));
     tmp_aln = mapped_file->parseRead(Parameter::Instance()->min_mq);
@@ -816,14 +830,14 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 
     num_reads = 0;
     map<string, map_example> example_map;
-    while (!tmp_aln->getQueryBases().empty() && (i != bp_realn.end() || !active_bp.empty())) {
+    while (!tmp_aln->getQueryBases().empty() && (i != bp_rlns.end() || !active_bp.empty())) {
         if (tmp_aln->get_is_save()) {
 //            std::cout << ref[tmp_aln->getRefID()].RefName << " " << tmp_aln->getPosition() << endl;
 //            cout << "step0" << endl;
             vector<differences_str> event_aln;
             vector<indel_str> dels;
             event_aln = tmp_aln->summarizeAlignment(dels);
-            while (i != bp_realn.end()) {
+            while (i != bp_rlns.end()) {
                 if (i->chr_idx.first != tmp_aln->getRefID())
                     break;
                 if (i->chr_pos.first + distance >= tmp_aln->getPosition() &&
@@ -846,15 +860,22 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                 active_bp.erase(active_bp.begin(), active_bp.begin() + num_rm);
 //                cout << "after step2.1" << endl;
             }
-            string chr;
+
             if (!active_bp.empty()) {
                 for (auto j = active_bp.begin(); j != active_bp.end(); j++) {
-                    if (tmp_aln->getName() == "28cb0a96-7d75-4073-87c1-857ea0e72939") {
-                        tmp_aln->bp_read_pos == -1;
+                    if (tmp_aln->getName() == "52382413-3302-4d5f-9a2e-1c4a244442d7") {
+                        tmp_aln->bp_read_pos += 0;
                         tmp_aln->bp_read_pos += 0;
                     }
 
                     realign_read(*j, event_aln, tmp_aln, index, fasta, ref);
+                    if (tmp_aln->bp_read_pos == 0)
+                        continue;
+//                    if (tmp_aln->bp_read_pos < 0 || tmp_aln->bp_read_pos < tmp_aln->getAlignment()->Length) {
+//                        tmp_aln->bp_read_pos == -1;
+//                         tmp_aln->bp_read_pos += 0;
+//
+//                     }
                     if (j->chr_pos.first == 4007175 || j->chr_pos.first == 163087117 || j->chr_pos.first == 4008128 || j->chr_pos.first == 163088072)  {
                         if (example_map.find(tmp_aln->getName()) == example_map.end()) {
 
@@ -868,6 +889,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
                                 example.read_pos.first = tmp_aln->bp_read_pos;
                             else example.read_pos.first = tmp_aln->bp_read_pos + distance;
                             example.ref_pos.first = j->chr_pos.second;
+
 
                             example.diff.first = tmp_aln->diff;
                             example_map[tmp_aln->getName()] = example;
@@ -891,7 +913,7 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
 
 
 //                cout << "step3" << endl;
-            } else if (i != bp_realn.end()){
+            } else if (i != bp_rlns.end()){
                 if ((tmp_aln->getPosition() + tmp_aln->getRefLength() < i->chr_pos.first - distance
                 && tmp_aln->getRefID() == i->chr_idx.first) || tmp_aln->getRefID() < i->chr_idx.first) // read is behind bp
                     mapped_file->Jump(i->chr_idx.first, max((long)0, i->chr_pos.first - distance));
@@ -920,6 +942,8 @@ void detect_breakpoints(std::string read_filename, IPrinter *& printer) {
             continue;
         map_example example = example_map_tuple.second;
         if (example.chr != "") {
+            if (example.bases.size() == 0)
+                continue;
             int read_pos_first = example.read_pos.first, read_pos_second = example.read_pos.second,
             ref_pos_first = example.ref_pos.first, ref_pos_second = example.ref_pos.second,
             diff_first = example.diff.first, diff_second = example.diff.second;

@@ -39,7 +39,7 @@ struct tra_str{
 };
 
 
-struct BreakPointRealign{
+struct BpRln{
 //    int originalSupport;
     bool isSameStrand;
     pair<long, long> coordinate;
@@ -48,7 +48,7 @@ struct BreakPointRealign{
     pair<int, int> chr_idx;
     Breakpoint * bp;
 
-    BreakPointRealign(bool strand, pair<long, long> coor, const RefVector ref, Breakpoint * breakpoint){
+    BpRln(bool strand, pair<long, long> coor, const RefVector ref, Breakpoint * breakpoint){
         isSameStrand = strand;
         coordinate = coor;
         chr_pos.first = IPrinter::calc_pos(coordinate.first, ref, chr_idx.first);
@@ -59,13 +59,12 @@ struct BreakPointRealign{
         bp = breakpoint;
     }
 
-    bool operator < (const BreakPointRealign& bp) const {
+    bool operator < (const BpRln& bp) const {
         if (chr.first == bp.chr.first)
             return chr_pos.first < bp.chr_pos.first;
 //        else return std::stoi(chr.first.substr(3, chr.first.size())) < std::stoi(bp.chr.first.substr(3, bp.chr.first.size()));
         else return chr_idx.first < bp.chr_idx.first;
     }
-
 };
 
 
