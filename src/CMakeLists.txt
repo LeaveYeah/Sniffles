@@ -50,7 +50,7 @@ add_executable(sniffles
 					cluster/Cluster_SVs.cpp
 					force_calling/Force_calling.cpp
 					force_calling/VCF_parser.cpp
-					)										
+        			sub/Realign.cpp)
 					
 #target_link_libraries(ngm-core pthread)	
 TARGET_LINK_LIBRARIES(sniffles BamTools-static)
@@ -80,7 +80,7 @@ add_executable(sniffles-debug
 					cluster/Cluster_SVs.cpp
 					force_calling/Force_calling.cpp
 					force_calling/VCF_parser.cpp
-					)	
+        			sub/Realign.cpp)
 
 SET_TARGET_PROPERTIES(sniffles-debug PROPERTIES COMPILE_FLAGS "-g3 -O0")
 
