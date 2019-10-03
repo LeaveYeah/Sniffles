@@ -1198,7 +1198,7 @@ vector<str_event> Alignment::get_events_Aln() {
 		if (event_aln[i].type == 0) { //substitutions.
 			tmp = plane->add_mut(event_aln[i].position, 1, Parameter::Instance()->window_thresh);
 		} else {
-			tmp = plane->add_mut(event_aln[i].position, 1, Parameter::Instance()->window_thresh);	// abs(event_aln[i].type)
+			tmp = plane->add_mut(event_aln[i].position, abs(event_aln[i].type), Parameter::Instance()->window_thresh);	// abs(event_aln[i].type)
 		}
 		if (tmp.position != -1 && (profile.empty() || (tmp.position - profile[profile.size() - 1].position) > 100)) {	//for noisy events;
 			profile.push_back(tmp);
@@ -1214,7 +1214,7 @@ vector<str_event> Alignment::get_events_Aln() {
 	size_t start = 0;
 	for (size_t i = 0; i < profile.size() && stop < event_aln.size(); i++) {
 		if (profile[i].position >= event_aln[stop].position) {
-			//find the postion:
+			//find the position:
 			size_t pos = 0;
 			while (pos < event_aln.size() && event_aln[pos].position != profile[i].position) {
 				pos++;

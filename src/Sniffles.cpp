@@ -461,6 +461,7 @@ int main(int argc, char *argv[]) {
 			return -1;
 		}
 
+
 		printer->init();
 		if (Parameter::Instance()->input_vcf.empty()) {
 			//regular calling

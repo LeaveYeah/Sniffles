@@ -6,6 +6,7 @@
 #include "limits.h"
 #include "seqan/align.h"
 #include "seqan/bam_io.h"
+#include <set>
 
 
 using namespace std;
@@ -30,6 +31,14 @@ void ClippedRead::set_ref_pos(vector<aln_str> split_events){
     this->ref_stop = max_pos;
 }
 
+long get_ref_lengths(int id, RefVector ref) {
+    long length = 0;
+
+    for (size_t i = 0; i < (size_t) id && i < ref.size(); i++) {
+        length += (long) ref[i].RefLength + (long) Parameter::Instance()->max_dist;
+    }
+    return length;
+}
 
 void fix_mismatch_read_pos(vector<differences_str> &event_aln, int i, Alignment * tmp_aln){
     int read_pos = 0;
@@ -42,6 +51,44 @@ void fix_mismatch_read_pos(vector<differences_str> &event_aln, int i, Alignment 
         event_aln[i].readposition = event_aln[i-1].readposition + event_aln[i].position - event_aln[i-1].position -
                                     event_aln[i-1].type;
 }
+
+void detect_bp_for_realn(Breakpoint  *breakpoint, const RefVector ref, vector<BpRln> &bp_rlns, bool denovo) {
+    auto point = breakpoint->get_coordinates();
+    vector<tra_str> pos_start;
+
+    vector<tra_str> pos_stop;
+
+
+    for (auto i = point.support.begin(); i != point.support.end(); ++i) {
+        store_tra_pos(pos_start, (*i).second, (*i).first, true);
+        store_tra_pos(pos_stop, (*i).second, (*i).first, false);
+    }
+
+    for (size_t i = 0; i < pos_start.size(); i++) {
+
+        if (pos_start[i].hits >= Parameter::Instance()->min_support / 3) {
+//        if (pos_start[i].hits >= 2) {
+
+            bool isSameStrand = pos_start[i].sameStrand_hits >= pos_start[i].diffStrand_hits;
+            pair<long, long> coordinate;
+            int max_start = 0, max_stop = 0;
+            coordinate.first = get_max_pos(pos_start[i].map_pos, max_start);
+            coordinate.second = get_max_opp_pos(pos_start[i].map_pos[coordinate.first], max_stop);
+
+            BpRln start_bp(isSameStrand, coordinate, ref, breakpoint);
+            std::swap(coordinate.first, coordinate.second);
+            BpRln stop_bp(isSameStrand, coordinate, ref, breakpoint);
+            if (denovo) {
+                start_bp.denovo = true;
+                bp_rlns.push_back(start_bp);
+            } else {
+                bp_rlns.push_back(start_bp);
+                bp_rlns.push_back(stop_bp);
+            }
+        }
+    }
+}
+
 
 void store_tra_pos(vector<tra_str> &positions, read_str read, std::string read_name, bool start) {
     long pos, opp_pos;
@@ -238,8 +285,8 @@ int map_clipped_read(rln_str event_rln, int distance, const bioio::FastaIndex  i
 
 
     int score = globalAlignment(alignG, Score<int, Simple>(0, -1, -1), AlignConfig<false, false, true, true>(), LinearGaps());
-//    std::cout << score << endl;
-//    std::cout << alignG << endl;
+    std::cout << score << endl;
+    std::cout << alignG << endl;
     return score;
 }
 
@@ -289,12 +336,10 @@ void add_realign_read(string name, rln_str event_rln){
 }
 
 
-bool detect_gap(Alignment* tmp_aln, long ref_pos, int distance, RefVector ref) {
-    if (tmp_aln->getName() == "cb169fa3-e5f9-4007-b234-089110b6f71e")
-        tmp_aln->bp_read_pos += 0;
+bool detect_gap(Alignment* tmp_aln, std::vector <aln_str> split_events, long ref_pos, int distance, RefVector ref) {
+
 //    cout << ref_pos << endl;
 //    cout << "step2" << endl;
-    std::vector <aln_str> split_events = tmp_aln->getSA(ref);
     if (split_events.size() == 0) return false;
     long read_length;
     aln_str last_event = split_events[split_events.size()-1];
@@ -383,7 +428,8 @@ void detect_clipped_reads_rln(BpRln bp_realign,  Alignment* tmp_aln,
         bp_realign.chr_pos.first + distance >= tmp_aln->getPosition() + tmp_aln->getRefLength()) {
         auto map_support = bp_realign.bp->get_coordinates().support;
         if (map_support.find(tmp_aln->getName()) != map_support.end()) return;
-        bool existsGap = detect_gap(tmp_aln, bp_realign.chr_pos.first, distance,  ref);
+        if (add_missed_tra(split_events, bp_realign, tmp_aln, ref)) return;
+        bool existsGap = detect_gap(tmp_aln, split_events, bp_realign.chr_pos.first, distance,  ref);
         if (!existsGap) return;
         rln_str event_rln;
         event_rln.side = tmp_aln->high_error_side;
@@ -429,29 +475,420 @@ void realign_across_read(BpRln bp_realign, vector<differences_str> &event_aln, A
     }
 }
 
-void realign_read(BpRln bp_realign, vector<differences_str> &event_aln, Alignment* tmp_aln,
-                  const bioio::FastaIndex  index, std::ifstream & fasta, RefVector ref) {
+void add_clipped_reads(Alignment *& tmp, std::vector<aln_str> events, short type, RefVector ref, IntervallTree& bst, TNode *&root, long read_id) {
     int distance = min(100, Parameter::Instance()->min_length);
-    if (bp_realign.chr_pos.first - distance <= tmp_aln->getPosition() ||
-        bp_realign.chr_pos.first + distance >= tmp_aln->getPosition() + tmp_aln->getRefLength()) {
-        if (!Parameter::Instance()->realn_clipped)
-            return;
-        auto map = bp_realign.bp->get_coordinates().support;
-        if (map.find(tmp_aln->getName()) != map.end()) return;
-        bool existsGap = detect_gap(tmp_aln, bp_realign.chr_pos.first, distance,  ref);
-        if (!existsGap) return;
-        int alt_aln_score = map_read(tmp_aln, bp_realign,  distance, index, fasta);
-        if (alt_aln_score > -0.2 * distance)
-            add_realign_read(bp_realign,  tmp_aln);
+    long read_length;
+    aln_str last_event = events[events.size()-1];
+//    cout << "step2.1" << endl;
+    if (tmp->getAlignment()->IsPrimaryAlignment() && !(tmp->getAlignment()->AlignmentFlag & 0x800) )
+        read_length = tmp->getAlignment()->Length;
+    else if (last_event.strand) {
+        read_length = last_event.read_pos_stop;
+        if (last_event.cigar.size() > 0 && last_event.cigar.back().Type == 'S')
+            read_length += last_event.cigar.back().Length;
     } else {
+        read_length = last_event.read_pos_stop;
+        if (last_event.cigar.size() > 0 && last_event.cigar.front().Type == 'S')
+            read_length += last_event.cigar.front().Length;
+    }
 
-        bool exists_high_error_side = cal_high_error_side(event_aln, bp_realign.chr_pos.first, distance,  tmp_aln);
-        if (!exists_high_error_side) return;
-        int alt_aln_score = map_read(tmp_aln, bp_realign,  distance, index, fasta);
-        if (alt_aln_score - tmp_aln->high_error_region_score > distance / 5 &&
-            alt_aln_score > -0.2 * distance) {
-            add_realign_read(bp_realign,  tmp_aln);
+    if (events[0].read_pos_start >= distance) {
+        position_str svs;
+        read_str read;
+        read.sequence = "NA";
+        read.type = type;
+        read.SV = 0;
+        read.read_strand.first = events[0].strand;
+        read.read_strand.first = events[0].strand;
+        if (events[0].strand) {
+            read.clipped_end = -1;
+            read.coordinates.second = events[0].pos + get_ref_lengths(events[0].RefID, ref);
+            read.coordinates.first = events[0].pos - distance+ get_ref_lengths(events[0].RefID, ref);
+        } else {
+            read.clipped_end = 1;
+            read.coordinates.first = events[0].pos + events[0].length + get_ref_lengths(events[0].RefID, ref);
+            read.coordinates.second = events[0].pos + events[0].length + get_ref_lengths(events[0].RefID, ref) + distance;
+        }
+
+        if (tmp->getStrand()){
+            read.read_pos.first = events[0].read_pos_start - distance;
+            read.read_pos.second =  events[0].read_pos_start;
+        } else {
+            read.read_pos.first = read_length - 1 - events[0].read_pos_start;
+            read.read_pos.second =  read_length - 1 - events[0].read_pos_start + distance;
+        }
+//        cout << tmp->getName() << " " << tmp->getQueryBases().size() << " " << read.coordinates.first <<
+//             " " << read.coordinates.second << endl;
+//        cout << tmp->getQueryBases().substr(read.read_pos.first, distance) << endl;
+
+        read.id = read_id;
+        svs.start.min_pos = read.coordinates.first;
+        svs.start.max_pos = read.coordinates.first;
+        svs.stop.min_pos = read.coordinates.second;
+        svs.stop.max_pos = read.coordinates.second;
+
+        svs.support[tmp->getName()] = read;
+        svs.support[tmp->getName()].length = abs(read.coordinates.second - read.coordinates.first);
+        Breakpoint *point = new Breakpoint(svs, abs(read.coordinates.second - read.coordinates.first));
+        bst.insert(point, root);
+    }
+
+    if (abs(last_event.read_pos_stop - read_length) > distance) {
+        position_str svs;
+        read_str read;
+        read.sequence = "NA";
+        read.type = type;
+        read.SV = 0;
+        read.read_strand.first = last_event.strand;
+        read.read_strand.second = last_event.strand;
+        if (!last_event.strand) {
+            read.clipped_end = -1;
+            read.coordinates.second = last_event.pos + get_ref_lengths(last_event.RefID, ref);
+            read.coordinates.first = last_event.pos - distance+ get_ref_lengths(last_event.RefID, ref);
+        } else {
+            read.clipped_end = 1;
+            read.coordinates.first = last_event.pos + last_event.length + get_ref_lengths(last_event.RefID, ref);
+            read.coordinates.second = last_event.pos + last_event.length + distance + get_ref_lengths(last_event.RefID, ref);
+
+        }
+        if (tmp->getStrand()){
+            read.read_pos.first = last_event.read_pos_stop;
+            read.read_pos.second =  last_event.read_pos_stop + distance;
+        } else {
+            read.read_pos.first = read_length - 1 - last_event.read_pos_stop - distance;
+            read.read_pos.second = read_length - 1 - last_event.read_pos_stop;
+        }
+//        cout << tmp->getName() << " " << tmp->getQueryBases().size() << " " << read.coordinates.first <<
+//                " " << read.coordinates.second << endl;
+//        cout << tmp->getQueryBases().substr(read.read_pos.first, distance) << endl;
+
+        read.id = read_id;
+        svs.start.min_pos = read.coordinates.first;
+        svs.start.max_pos = read.coordinates.first;
+        svs.stop.min_pos = read.coordinates.second;
+        svs.stop.max_pos = read.coordinates.second;
+
+        svs.support[tmp->getName()] = read;
+        svs.support[tmp->getName()].length = abs(read.coordinates.second - read.coordinates.first);
+        Breakpoint *point = new Breakpoint(svs, abs(read.coordinates.second - read.coordinates.first));
+        bst.insert(point, root);
+    }
+
+
+    for (size_t i = 1; i < events.size(); i++) {
+        //	if (events[i - 1].length > Parameter::Instance()->min_segment_size || events[i].length > Parameter::Instance()->min_segment_size) {
+        position_str svs;
+        //position_str stop;
+        read_str read;
+        read.sequence = "NA";
+        //read.name = tmp->getName();
+        read.type = type;
+        read.SV = 0;
+        read.read_strand.first = events[i - 1].strand;
+        read.read_strand.second = !events[i].strand;
+        if (events[i-1].RefID == events[i].RefID) {
+            if (events[i].read_pos_start - events[i - 1].read_pos_stop >= distance) {
+                if (events[i - 1].strand == events[i].strand) {
+                    //check this with + - strands!!
+
+                    if (events[i - 1].strand) { //"++"
+                        svs.start.min_pos =
+                                events[i - 1].pos + events[i - 1].length + get_ref_lengths(events[i - 1].RefID, ref);
+                        svs.stop.max_pos = events[i].pos + get_ref_lengths(events[i].RefID, ref);
+                    } else { //"--"
+                        svs.start.min_pos = events[i - 1].pos + get_ref_lengths(events[i - 1].RefID, ref);
+                        svs.stop.max_pos = events[i].pos + events[i].length + get_ref_lengths(events[i].RefID, ref);
+                    }
+                } else {
+                    if (events[i - 1].strand) { //"+-"
+                        svs.start.min_pos =
+                                events[i - 1].pos + events[i - 1].length + get_ref_lengths(events[i - 1].RefID, ref);
+                        svs.stop.max_pos = events[i].pos + events[i].length + get_ref_lengths(events[i].RefID, ref);
+                    } else { //"-+"
+                        svs.start.min_pos = events[i - 1].pos + get_ref_lengths(events[i - 1].RefID, ref);
+                        svs.stop.max_pos = events[i].pos + get_ref_lengths(events[i].RefID, ref);
+                    }
+                }
+                if (tmp->getStrand()) {
+                    read.read_pos.first = events[i - 1].read_pos_stop;
+                    read.read_pos.second = events[i].read_pos_start;
+                } else {
+                    read.read_pos.first = read_length - 1 - events[i].read_pos_start;
+                    read.read_pos.second = read_length - 1 - events[i - 1].read_pos_stop;
+                }
+
+                read.SV |= TRA;
+
+
+
+                //std::cout<<"split"<<std::endl;
+
+                svs.start.max_pos = svs.start.min_pos;
+                svs.stop.min_pos = svs.stop.max_pos;
+                if (svs.start.min_pos > svs.stop.max_pos) {
+                    //maybe we have to invert the directions???
+                    svs_breakpoint_str pos = svs.start;
+                    svs.start = svs.stop;
+                    svs.stop = pos;
+
+                    pair<bool, bool> tmp = read.strand;
+
+                    read.strand.first = tmp.second;
+                    read.strand.second = tmp.first;
+                }
+
+                //TODO: we might not need this:
+                if (svs.start.min_pos > svs.stop.max_pos) {
+                    read.coordinates.first = svs.stop.max_pos;
+                    read.coordinates.second = svs.start.min_pos;
+                } else {
+                    read.coordinates.first = svs.start.min_pos;
+                    read.coordinates.second = svs.stop.max_pos;
+                }
+//                cout << tmp->getName() << " " << tmp->getQueryBases().size() << " " << read.coordinates.first <<
+//                     " " << read.coordinates.second << endl;
+//                cout << tmp->getQueryBases().substr(read.read_pos.first, read.read_pos.second - read.read_pos.first)
+//                     << endl;
+
+
+                //pool out?
+                read.id = read_id;
+                svs.support[tmp->getName()] = read;
+                svs.support[tmp->getName()].length = abs(read.coordinates.second - read.coordinates.first);
+                Breakpoint *point = new Breakpoint(svs, abs(read.coordinates.second - read.coordinates.first));
+                //std::cout<<"split ADD: " << <<" Name: "<<tmp->getName()<<" "<< svs.start.min_pos- get_ref_lengths(events[i].RefID, ref)<<"-"<<svs.stop.max_pos- get_ref_lengths(events[i].RefID, ref)<<std::endl;
+                bst.insert(point, root);
+
+            }
         }
     }
+}
+
+bool add_missed_tra(vector<aln_str> split_events, BpRln bpRln, Alignment * tmp_aln, RefVector ref){
+    int tol = 100;
+
+    for (int i = 1; i < split_events.size(); i++) {
+        read_str read;
+        if (split_events[i-1].RefID == bpRln.chr_idx.first && abs(split_events[i-1].pos - bpRln.chr_pos.first) <= tol
+            && split_events[i].RefID == bpRln.chr_idx.second && abs(split_events[i].pos - bpRln.chr_pos.second) <= tol) {
+            read.coordinates.first = split_events[i-1].pos + get_ref_lengths(split_events[i-1].RefID, ref);
+            read.coordinates.second = split_events[i].pos + get_ref_lengths(split_events[i].RefID, ref);
+        } else if (split_events[i].RefID == bpRln.chr_idx.first && abs(split_events[i].pos - bpRln.chr_pos.first) <= tol
+            && split_events[i-1].RefID == bpRln.chr_idx.second && abs(split_events[i-1].pos - bpRln.chr_pos.second) <= tol) {
+            read.coordinates.first = split_events[i].pos + get_ref_lengths(split_events[i].RefID, ref);
+            read.coordinates.second = split_events[i-1].pos + get_ref_lengths(split_events[i-1].RefID, ref);
+        } else continue;
+        if (read.coordinates.first > read.coordinates.second){
+            read_str tmp = read;
+            read.coordinates.first = tmp.coordinates.second;
+            read.coordinates.second = tmp.coordinates.first;
+        }
+        read.SV = TRA;
+        read.type = 1;
+        bpRln.bp->add_read(read, tmp_aln->getName());
+        return true;
+    }
+    return false;
+}
+
+void add_high_error_reads(Alignment *& tmp_aln, RefVector ref, IntervallTree& bst, TNode *&root, long read_id){
+    if (tmp_aln->getName() == "395e701a-bac9-4776-a250-be6e016f2ffc"){
+        tmp_aln->bp_read_pos += 0;
+        tmp_aln->bp_read_pos += 0;
+    }
+
+
+    std::vector<indel_str> dels;
+    vector<differences_str> event_aln;
+
+    event_aln = tmp_aln->summarizeAlignment(dels);
+
+    PlaneSweep_slim * plane = new PlaneSweep_slim();
+    vector<pair_str> profile;
+    for (size_t i = 0; i < event_aln.size(); i++) {
+        pair_str tmp;
+        tmp.position = -1;
+        if (event_aln[i].type == 0) { //substitutions.
+            tmp = plane->add_mut(event_aln[i].position, 1, Parameter::Instance()->window_thresh);
+        } else if (abs(event_aln[i].type) <= 10){
+            tmp = plane->add_mut(event_aln[i].position, abs(event_aln[i].type), Parameter::Instance()->window_thresh);	// abs(event_aln[i].type)
+        }
+        if (tmp.position != -1 && (profile.empty() || (tmp.position - profile[profile.size() - 1].position) > 100)) {	//for noisy events;
+            profile.push_back(tmp);
+        }
+    }
+    if (profile.size() > 4)
+        return;
+    int stop = 0;
+    size_t start = 0;
+    for (size_t i = 0; i < profile.size() && stop < event_aln.size(); i++) {
+        if (profile[i].position >= event_aln[stop].position) {
+            //find the position:
+            size_t pos = 0;
+            while (pos < event_aln.size() && event_aln[pos].position != profile[i].position) {
+                pos++;
+            }
+            //run back to find the start:
+            start = pos;
+            int prev = event_aln[pos].position;
+            start = pos;
+            int prev_type = 1;
+            int start_pos = event_aln[pos].position;
+            //todo it is actually pos + type and not *type
+            while (start > 0 ) {    //13		//} * abs(event_aln[start].type) + 1)) { //TODO I  dont like 13!??
+                if (prev - start_pos >= Parameter::Instance()->max_dist_alns) {
+                    int leftSideErrors = 0;
+                    for (int i = start+1; event_aln[start+1].position - event_aln[i].position < 50; i--){
+                        leftSideErrors += max(1, (int)abs(event_aln[i].type));
+                    }
+                    if (leftSideErrors < 15) break;
+                }
+                prev = event_aln[start].position;
+                start--;
+                start_pos = event_aln[start].position + max(1, (int)abs(event_aln[start].type));
+            }
+            if (start + 1 < event_aln.size()) { //TODO do some testing!
+                start++; //we are running one too far!
+            }
+            //run forward to identify the stop:
+            prev = event_aln[pos].position;
+            stop = pos;
+            prev_type = 1;
+            while (stop < event_aln.size()) {        // * abs(event_aln[stop].type) + 1)) {
+                if (event_aln[stop].position - prev >= Parameter::Instance()->max_dist_alns){
+                    int rightSideErrors = 0;
+                    for (int i = stop-1; event_aln[i].position + abs(event_aln[i].type) - event_aln[stop-1].position < 50; i++){
+                        rightSideErrors += max(1, (int)abs(event_aln[i].type));
+                    }
+                    if (rightSideErrors < 15) break;
+                }
+                prev = event_aln[stop].position;
+                prev_type = abs(event_aln[stop].type);
+                if (prev_type == 0) {
+                    prev_type = 1;
+                }
+                prev += prev_type;
+                stop++;
+            }
+            if (stop > 0) {
+                stop--;
+            }
+            cout << event_aln[start].position << " " << event_aln[stop].position << endl;
+            position_str svs;
+            read_str read;
+            read.sequence = "NA";
+            read.type = 1;
+            read.SV = TRA;
+            read.read_strand.first = tmp_aln->getStrand();
+            read.read_strand.second =  tmp_aln->getStrand();
+            read.coordinates.first = event_aln[start].position + get_ref_lengths(tmp_aln->getRefID(), ref);
+            read.coordinates.second = event_aln[stop].position + get_ref_lengths(tmp_aln->getRefID(), ref);
+            read.read_pos.first = start;
+            read.read_pos.second = stop;
+            read.id = read_id;
+            svs.start.min_pos = read.coordinates.first;
+            svs.start.max_pos = read.coordinates.first;
+            svs.stop.min_pos = read.coordinates.second;
+            svs.stop.max_pos = read.coordinates.second;
+            svs.support[tmp_aln->getName()] = read;
+            svs.support[tmp_aln->getName()].length = abs(read.coordinates.second - read.coordinates.first);
+            Breakpoint *point = new Breakpoint(svs, abs(read.coordinates.second - read.coordinates.first));
+            bst.insert(point, root);
+
+        }
+    }
+}
+
+void detect_bps_for_realn(vector<Breakpoint*> points, vector<Breakpoint*> points_rln, const RefVector ref, vector<BpRln> &bp_rlns) {
+    long max_dist = Parameter::Instance()->max_dist * 2;
+    vector<Breakpoint*> points_rln_final,points_final;
+    for (Breakpoint* bp_rln: points_rln){
+        if (bp_rln->get_coordinates().support.size() >= Parameter::Instance()->min_support / 2)
+            points_rln_final.push_back(bp_rln);
+    }
+    points_rln.clear();
+
+    if (points.empty()){
+        for (auto bp: points_rln_final) detect_bp_for_realn(bp, ref, bp_rlns, true);
+        return;
+    }
+
+    for (auto bp: points){
+        if (bp->get_SVtype() & TRA)
+            detect_bp_for_realn(bp, ref, bp_rlns, false);
+        else if (bp->get_coordinates().support.size() < Parameter::Instance()->min_support)
+             points_final.push_back(bp);
+    }
+    points.clear();
+    for (Breakpoint* bp_rln: points_rln_final) bp_rln->set_valid(true);
+//    Breakpoint * bp;
+//    bp->get_coordinates().start.min_pos
+
+    size_t j = 0;
+
+    for (size_t i = 0; i < points_final.size(); i++) {
+
+        if (points_final[i]->get_coordinates().start.min_pos <
+            points_rln_final[j]->get_coordinates().start.min_pos - max_dist)
+            continue;
+
+        while (points_final[i]->get_coordinates().start.min_pos >
+               points_rln_final[j]->get_coordinates().start.min_pos + max_dist && j < points_rln_final.size()) {
+            j++;
+        }
+        if (j == points_rln_final.size())
+            break;
+
+        for (size_t k = j; points_rln_final[k]->get_coordinates().start.min_pos <= points_final[i]->get_coordinates().start.min_pos + max_dist
+        && k < points_rln_final.size(); k++) {
+            if (!points_rln_final[k]->get_valid()) continue;
+            vector<string> same_reads;
+            set<string> i_reads, k_reads;
+            auto i_support_map = points_final[i]->get_coordinates().support;
+            auto k_support_map =  points_rln_final[k]->get_coordinates().support;
+            for (auto it = i_support_map.begin(); it != i_support_map.end(); it++) i_reads.insert(it->first);
+            for (auto it = k_support_map.begin(); it != k_support_map.end(); it++) k_reads.insert(it->first);
+            set_intersection(i_reads.begin(),i_reads.end(),k_reads.begin(),k_reads.end(), std::back_inserter(same_reads));
+
+            int num_overlap = 0;
+            for (string read_name: same_reads){
+                read_str i_read = points_final[i]->get_coordinates().support[read_name];
+                read_str k_read = points_final[k]->get_coordinates().support[read_name];
+
+                 if ( i_read.coordinates.first <= k_read.coordinates.second &&
+                    i_read.coordinates.second >= k_read.coordinates.first )
+                    num_overlap++;
+            }
+            if (num_overlap > 5)
+                points_rln_final[j]->set_valid(false);
+        }
+    }
+
+    std::sort(bp_rlns.begin(), bp_rlns.end());
+    vector<BpRln> bps_tmp;
+    size_t point_size = bp_rlns.size(), l = 0;
+
+    for (Breakpoint * bp: points_rln_final) {
+        if (bp->get_valid()) {
+            detect_bp_for_realn(bp, ref, bps_tmp, true);
+        }
+    }
+
+    for (int i = 0; i < point_size; i++) {
+        while (bp_rlns[i].coordinate.first > bps_tmp[l].coordinate.second + Parameter::Instance()->min_length &&
+        j < bps_tmp.size()) {
+            bp_rlns.push_back(bps_tmp[l]);
+            l++;
+        }
+        while ((bp_rlns[i].coordinate.first >= bps_tmp[l].coordinate.first - Parameter::Instance()->min_length ||
+                bp_rlns[i].coordinate.first <= bps_tmp[l].coordinate.second + Parameter::Instance()->min_length) &&
+               l < bps_tmp.size())
+            l++;
+        if (l == bps_tmp.size())
+            break;
+    }
+    for (; l < bps_tmp.size(); l++)
+        bp_rlns.push_back(bps_tmp[l]);
+    std::sort(bp_rlns.begin(), bp_rlns.end());
 }
 

@@ -43,10 +43,12 @@ struct read_str {
 	//for later assessment:
 	pair<bool, bool> strand;
 	pair<bool, bool> read_strand;
+	pair<long, long> read_pos;
 	pair<long,long> coordinates; // I could use the bin tree for that!
 	char SV; // bit vector
 	int length;
 	std::string sequence; //just for indels!
+	int clipped_end; //-1: clipped in the left end; 0: not clipped in the end; 1: clipped in the right end
 };
 struct position_str {
 	svs_breakpoint_str start;
@@ -166,7 +168,6 @@ public:
 	std::string get_supporting_types(){
 		return this->supporting_types;
 	}
-
 
 	void add_grouped(int id){
 		this->grouped.insert(this->grouped_node, id);
