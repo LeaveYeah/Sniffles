@@ -82,7 +82,6 @@ private:
 	int32_t orig_length;
 	int stop;
 	 std::vector<CigarOp> translate_cigar(std::string cigar);
-	 size_t get_length(std::vector<CigarOp> CigarData);
 	 int get_id(RefVector ref, std::string chr);
 	 vector<differences_str> summarize_csstring (std::vector<indel_str> &dels) ;
 	 void sort_insert(aln_str tmp, vector<aln_str> &entries);
@@ -116,6 +115,7 @@ public:
 		delete al;
 	}
     vector<differences_str> summarizeAlignment(std::vector<indel_str> &dels);
+    size_t get_length(std::vector<CigarOp> CigarData);
 	void setAlignment(BamAlignment * al);
 	void setRef(string sequence);
 	void computeAlignment();

@@ -193,7 +193,13 @@ void Breakpoint::add_read(Breakpoint * point) { //point = one read support!
 		    auto map = this->positions.support;
 		    if (map.find((*i).first) == map.end())
 			    this->positions.support[(*i).first] = (*i).second;
-		    else this->positions.support[(*i).first + "_ext"] = (*i).second;
+		    else {
+		        pair<long, long> original_coordinate = map[(*i).first].coordinates;
+		        if (abs(original_coordinate.first - (*i).second.coordinates.first) < Parameter::Instance()->min_length
+		         || abs(original_coordinate.second - (*i).second.coordinates.second) < Parameter::Instance()->min_length)
+		            return;
+		        this->positions.support[(*i).first + "_ext"] = (*i).second;
+		    }
 		}
 	}
 

@@ -86,7 +86,8 @@ void read_parameters(int argc, char *argv[]) {
 	TCLAP::ValueArg<int> arg_parameter_maxdiff("", "max_diff_per_window", "Maximum differences per 100bp.", false, 50, "int", cmd);
 
     TCLAP::SwitchArg arg_clipped("", "realign_clipped_reads", "Realign clipped reads", cmd, false);
-	TCLAP::SwitchArg arg_genotype("", "genotype", "Enables Sniffles to compute the genotypes.", cmd, false);
+    TCLAP::SwitchArg arg_global_map("", "global_map", "Remap reads globally", cmd, false);
+    TCLAP::SwitchArg arg_genotype("", "genotype", "Enables Sniffles to compute the genotypes.", cmd, false);
 	TCLAP::SwitchArg arg_cluster("", "cluster", "Enables Sniffles to phase SVs that occur on the same reads", cmd, false);
 	TCLAP::SwitchArg arg_std("", "ignore_sd", "Ignores the sd based filtering. ", cmd, false);
 	TCLAP::SwitchArg arg_bnd("", "report_BND", "Dont report BND instead use Tra in vcf output. ", cmd, false);
@@ -133,6 +134,7 @@ void read_parameters(int argc, char *argv[]) {
 	printParameter<int>(usage, arg_zmw);
 	printParameter(usage,arg_cs_string);
 	printParameter(usage, arg_clipped);
+	printParameter(usage, arg_global_map);
 
 	usage << "" << std::endl;
 	usage << "Clustering/phasing and genotyping:" << std::endl;
@@ -197,6 +199,7 @@ void read_parameters(int argc, char *argv[]) {
 	Parameter::Instance()->min_length = arg_minlength.getValue();
 	Parameter::Instance()->genotype = arg_genotype.getValue();
 	Parameter::Instance()->realn_clipped = arg_clipped.getValue();
+	Parameter::Instance()->global_map = arg_global_map.getValue();
 	Parameter::Instance()->phase = arg_cluster.getValue();
 	Parameter::Instance()->num_threads = arg_threads.getValue();
 	Parameter::Instance()->output_bedpe = arg_bedpe.getValue();

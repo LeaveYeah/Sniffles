@@ -49,6 +49,8 @@ struct read_str {
 	int length;
 	std::string sequence; //just for indels!
 	int clipped_end; //-1: clipped in the left end; 0: not clipped in the end; 1: clipped in the right end
+    bool processed = false;
+
 };
 struct position_str {
 	svs_breakpoint_str start;

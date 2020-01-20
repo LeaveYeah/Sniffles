@@ -2,28 +2,58 @@ cmake_minimum_required(VERSION 2.8)
 project(Sniffles)
 
 find_package (ZLIB)
-find_package (SeqAn REQUIRED)
+#find_package (SeqAn REQUIRED)
 
 
-configure_file( Version.h.in ${CMAKE_SOURCE_DIR}/src/Version.h )
+#configure_file( Version.h.in ${CMAKE_SOURCE_DIR}/src/Version.h )
 
-set(SEQAN_INCLUDE_DIRS "/data2/junwenwang/m204333/Project/seqan-v2.2.0/include")
+#set(SEQAN_INCLUDE_DIRS "/data2/junwenwang/m204333/Project/seqan-v2.2.0/include")
 
 include_directories (../lib/bamtools-2.3.0/src)
 include_directories(../lib/tclap-1.2.1/include)
-include_directories (${SEQAN_INCLUDE_DIRS})
+include_directories(../lib/seqan-library-2.2.0/include)
+#include_directories (${SEQAN_INCLUDE_DIRS})
 
-add_definitions (${SEQAN_DEFINITIONS})
+find_package (Threads)
 
- IF(STATIC)
-        SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-        SET(BUILD_SHARED_LIBRARIES OFF)
-        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+#add_definitions (${SEQAN_DEFINITIONS})
+
+IF(STATIC)
+	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+	SET(BUILD_SHARED_LIBRARIES OFF)
+	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 ENDIF()
 
 
 # Add CXX flags found by find_package (SeqAn).
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS}")
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+
+add_library(libminimap2
+		../lib/minimap2/kthread.c
+		../lib/minimap2/kalloc.c
+		../lib/minimap2/ksw2_extz2_sse.c
+		../lib/minimap2/ksw2_extd2_sse.c
+		../lib/minimap2/ksw2_exts2_sse.c
+		../lib/minimap2/misc.c
+		../lib/minimap2/bseq.c
+		../lib/minimap2/sketch.c
+		../lib/minimap2/sdust.c
+		../lib/minimap2/options.c
+		../lib/minimap2/index.c
+		../lib/minimap2/chain.c
+		../lib/minimap2/align.c
+		../lib/minimap2/hit.c
+		../lib/minimap2/map.c
+		../lib/minimap2/format.c
+		../lib/minimap2/pe.c
+		../lib/minimap2/esterr.c
+		../lib/minimap2/ksw2_ll_sse.c
+		../lib/minimap2/splitidx.c
+		)
+
+target_link_libraries(libminimap2 zlibstatic)
+target_link_libraries (libminimap2 ${CMAKE_THREAD_LIBS_INIT})
 
 # Add executable and link against SeqAn dependencies.
 
@@ -55,7 +85,8 @@ add_executable(sniffles
 #target_link_libraries(ngm-core pthread)	
 TARGET_LINK_LIBRARIES(sniffles BamTools-static)
 TARGET_LINK_LIBRARIES(sniffles zlibstatic)
-TARGET_LINK_LIBRARIES (sniffles ${SEQAN_LIBRARIES})
+#TARGET_LINK_LIBRARIES (sniffles ${SEQAN_LIBRARIES})
+TARGET_LINK_LIBRARIES(sniffles libminimap2)
 
 add_executable(sniffles-debug 	
                     tree/Breakpoint_Tree.cpp
@@ -88,8 +119,10 @@ SET_TARGET_PROPERTIES(sniffles-debug PROPERTIES COMPILE_FLAGS "-g3 -O0")
 
 #target_link_libraries(sniffles-debug pthread)
 TARGET_LINK_LIBRARIES(sniffles-debug BamTools-static)
-TARGET_LINK_LIBRARIES (sniffles-debug ${SEQAN_LIBRARIES})
+#TARGET_LINK_LIBRARIES (sniffles-debug ${SEQAN_LIBRARIES})
 TARGET_LINK_LIBRARIES(sniffles-debug zlibstatic)
+TARGET_LINK_LIBRARIES(sniffles-debug libminimap2)
+
 
 
 

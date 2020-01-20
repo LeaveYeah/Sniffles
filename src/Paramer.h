@@ -81,6 +81,7 @@ public:
 	bool debug;
 	bool genotype;
 	bool realn_clipped;
+	bool global_map;
 	bool phase;
 	bool ignore_std;
 	bool reportBND;

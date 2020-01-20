@@ -13,6 +13,7 @@
 #include "Breakpoint.h"
 #include "../bioio.hpp"
 #include "../tree/IntervallTree.h"
+#include <fstream>
 
 struct hist_str{
     long position;
@@ -34,6 +35,8 @@ struct tra_str{
 struct BpRln{
 //    int originalSupport;
     bool denovo;
+    bool clipped;
+    bool processed;
     bool isSameStrand;
     pair<long, long> coordinate;
     pair<long, long> chr_pos;
@@ -42,9 +45,9 @@ struct BpRln{
     Breakpoint * bp;
     std::map<std::string,read_str> reads;
 
-    BpRln(bool isSameStrand, pair<long, long> coordinates, const RefVector ref, Breakpoint * breakpoint){
+    BpRln(bool strand, pair<long, long> coordinates, const RefVector ref, Breakpoint * breakpoint){
         denovo = false;
-        this->isSameStrand = isSameStrand;
+        this->isSameStrand = strand;
         this->coordinate = coordinates;
         chr_pos.first = IPrinter::calc_pos(coordinate.first, ref, chr_idx.first);
         chr_pos.second = IPrinter::calc_pos(coordinate.second, ref, chr_idx.second);
@@ -62,7 +65,7 @@ struct BpRln{
 };
 
 struct rln_str {
-    bool isSameStrand;
+    bool strand;
     bool side;
     pair<string, string> ref;
     pair<long, long> ref_pos;
@@ -102,12 +105,14 @@ void add_realign_read(BpRln bp_realign,  Alignment * tmp_aln);
 void add_realign_read(string name, rln_str event_rln);
 bool detect_gap(Alignment* tmp_aln, vector<aln_str> split_events, long ref_pos, int distance, RefVector ref);
 void detect_clipped_reads_rln(BpRln bp_realign,  Alignment* tmp_aln,
-        RefVector ref, std::map<std::string, ClippedRead> &mapClippedRead);
+        RefVector ref, std::map<std::string, ClippedRead> &mapClippedRead, ofstream &fasta_out);
 void realign_across_read(BpRln bp_realign, vector<differences_str> &event_aln, Alignment* tmp_aln,
-                         const bioio::FastaIndex  index, std::ifstream & fasta, RefVector ref);
+                         const bioio::FastaIndex  index, std::ifstream & fasta, RefVector ref, ofstream &fasta_out);
 void add_clipped_reads(Alignment *& tmp, std::vector<aln_str> events, short type, RefVector ref, IntervallTree& bst, TNode *&root, long read_id);
 long get_ref_lengths(int id, RefVector ref);
 bool add_missed_tra(vector<aln_str> split_events, BpRln bpRln, Alignment* tmp_aln, RefVector ref);
 void add_high_error_reads(Alignment *& tmp, RefVector ref, IntervallTree& bst, TNode *&root, long read_id) ;
 void detect_bps_for_realn(vector<Breakpoint*> breakpoints, vector<Breakpoint*> breakpoints_rln, const RefVector ref, vector<BpRln> &bp_rlns);
+void minimap2(string target_path, string query_path, RefVector ref, IntervallTree & bst_rln_denovo,  TNode * &root_rln_denovo);
 #endif //SNIFFLES_REALIGN_H
+
