@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(Sniffles)
+project(Translocator)
 
 find_package (ZLIB)
 #find_package (SeqAn REQUIRED)
@@ -57,12 +57,12 @@ target_link_libraries (libminimap2 ${CMAKE_THREAD_LIBS_INIT})
 
 # Add executable and link against SeqAn dependencies.
 
-add_executable(sniffles
+add_executable(translocator
                     tree/Breakpoint_Tree.cpp
                     Genotyper/Genotyper.cpp
 					Alignment.cpp
 					BamParser.cpp
-					Sniffles.cpp
+		Translocator.cpp
 					Ignore_Regions.cpp
 					tree/Intervall_bed.cpp
 					sub/Detect_Breakpoints.cpp
@@ -83,17 +83,17 @@ add_executable(sniffles
         			sub/Realign.cpp)
 					
 #target_link_libraries(ngm-core pthread)	
-TARGET_LINK_LIBRARIES(sniffles BamTools-static)
-TARGET_LINK_LIBRARIES(sniffles zlibstatic)
-#TARGET_LINK_LIBRARIES (sniffles ${SEQAN_LIBRARIES})
-TARGET_LINK_LIBRARIES(sniffles libminimap2)
+TARGET_LINK_LIBRARIES(translocator BamTools-static)
+TARGET_LINK_LIBRARIES(translocator zlibstatic)
+#TARGET_LINK_LIBRARIES (translocator ${SEQAN_LIBRARIES})
+TARGET_LINK_LIBRARIES(translocator libminimap2)
 
-add_executable(sniffles-debug 	
+add_executable(translocator-debug
                     tree/Breakpoint_Tree.cpp
                     Genotyper/Genotyper.cpp
 					Alignment.cpp
 					BamParser.cpp
-					Sniffles.cpp
+		Translocator.cpp
 					Ignore_Regions.cpp
 					tree/Intervall_bed.cpp
 					tree/IntervallList.cpp
@@ -113,15 +113,15 @@ add_executable(sniffles-debug
 					force_calling/VCF_parser.cpp
         			sub/Realign.cpp)
 
-SET_TARGET_PROPERTIES(sniffles-debug PROPERTIES COMPILE_FLAGS "-g3 -O0")
+SET_TARGET_PROPERTIES(translocator-debug PROPERTIES COMPILE_FLAGS "-g3 -O0")
 
 
 
-#target_link_libraries(sniffles-debug pthread)
-TARGET_LINK_LIBRARIES(sniffles-debug BamTools-static)
-#TARGET_LINK_LIBRARIES (sniffles-debug ${SEQAN_LIBRARIES})
-TARGET_LINK_LIBRARIES(sniffles-debug zlibstatic)
-TARGET_LINK_LIBRARIES(sniffles-debug libminimap2)
+#target_link_libraries(translocator-debug pthread)
+TARGET_LINK_LIBRARIES(translocator-debug BamTools-static)
+#TARGET_LINK_LIBRARIES (translocator-debug ${SEQAN_LIBRARIES})
+TARGET_LINK_LIBRARIES(translocator-debug zlibstatic)
+TARGET_LINK_LIBRARIES(translocator-debug libminimap2)
 
 
 

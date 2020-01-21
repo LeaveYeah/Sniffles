@@ -1,19 +1,20 @@
 cmake_minimum_required(VERSION 2.8)
-project(Sniffles)
+project(Translocator)
 
 option(STATIC "Build static binary" OFF)
 
- set( SNIF_VERSION_MAJOR 1 )
- set( SNIF_VERSION_MINOR 0 )
+ set( TRAN_VERSION_MAJOR 1 )
+ set( TRAN_VERSION_MINOR 0 )
+
 IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Building in debug mode!")
-    set( SNIF_VERSION_BUILD 11-debug )
+    set( TRAN_VERSION_BUILD 0-debug )
 else()
-	set( SNIF_VERSION_BUILD 11 )
+	set( TRAN_VERSION_BUILD 0 )
 ENDIF()
 
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin/sniffles-core-${SNIF_VERSION_MAJOR}.${SNIF_VERSION_MINOR}.${SNIF_VERSION_BUILD}/)
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin/translocator-core-${TRAN_VERSION_MAJOR}.${TRAN_VERSION_MINOR}.${TRAN_VERSION_BUILD}/)
 file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
 
 

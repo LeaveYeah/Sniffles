@@ -1,9 +1,9 @@
 //============================================================================
-// Name        : Sniffles.cpp
-// Author      : Fritz Sedlazeck
+// Name        : Translocator.cpp
+// Author      : Ye Wu
 // Version     :
 // Copyright   : MIT License
-// Description : Detection of SVs for long read data.
+// Description : Detection of Translocations for long read data.
 //============================================================================
 //For mac: cmake -D CMAKE_C_COMPILER=/opt/local/bin/gcc-mp-4.7 -D CMAKE_CXX_COMPILER=/opt/local/bin/g++-mp-4.7 ..
 #include <iostream>
@@ -27,14 +27,7 @@
 
 //cmake -D CMAKE_C_COMPILER=/usr/local/bin/gcc-8 -D CMAKE_CXX_COMPILER=/usr/local/bin/g++-8 ..
 
-//TODO:
-//check strand headers.
-// strand bias??
-// I think you could make your performance on PacBio reads even better with a few modifications:
-//b. In pbsv, I use a simply mononucleotide consistency check to determine whether to cluster insertions from different reads as supporting the "same" events.  In addition to looking at the similarity of length and breakpoints,
-//you could measure [min(Act)+min(Cct)+min(Gct)+min(Tct) / max(Act)+max(Cct)+max(Gct)+max(Tct)]  Even a lax criterion (>0.25)
-//can avoid clustering phantom insertions (where one is say all A and the another is G+T).
-//[min(A1,A2)+min(C1,C2)+min(G1,G2)+min(T1,T2)[/[max...]/
+
 Parameter* Parameter::m_pInstance = NULL;
 
 template<typename T>
